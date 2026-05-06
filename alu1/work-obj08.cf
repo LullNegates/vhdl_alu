@@ -1,7 +1,0 @@
-v 4
-file . "src/alu1_tb.vhd" "85c67abe99613e33e3a911cc1ba43ca492ba3c24" "20260506184545.573":
-  entity alu1_tb at 1( 0) + 0 on 13;
-  architecture sim of alu1_tb at 8( 109) + 0 on 14;
-file . "src/alu1.vhd" "0af24555e8e371635ecfcc6a32c297f74b2698d6" "20260506184545.560":
-  entity alu1 at 1( 0) + 0 on 11;
-  architecture rtl of alu1 at 18( 536) + 0 on 12;
