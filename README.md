@@ -73,14 +73,15 @@ make view
 | Item | Status |
 |---|---|
 | Folder structure | Done |
-| ALU 1 spec (`doc/alu1-spec.md`) | Needs G5 values confirmed |
-| ALU 2 spec (`doc/alu2-spec.md`) | Needs G5 values confirmed |
-| `alu1.vhd` | TODO |
-| `alu1_tb.vhd` | TODO |
+| ALU 1 spec (`doc/alu1-spec.md`) | Done |
+| ALU 2 spec (`doc/alu2-spec.md`) | Drafted — confirm G5 port widths + op set |
+| `alu1.vhd` | Done — pure concurrent, 8 ops, carry output |
+| `alu1_tb.vhd` | Done — 10 vectors, all pass GHDL |
 | `alu2.vhd` | TODO |
 | `alu2_tb.vhd` | TODO |
-| GHDL simulation passing | TODO |
-| ISim simulation passing | TODO |
+| ALU 1 GHDL simulation | Passing — `@200ns: Simulation complete -- all assertions passed` |
+| ALU 2 GHDL simulation | TODO |
+| ISim screenshots (both ALUs) | TODO |
 
 ---
 
