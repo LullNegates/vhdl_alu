@@ -1,124 +1,240 @@
 library IEEE;
-use IEEE.STD_LOGIC_1164.all;
-use IEEE.NUMERIC_STD.all;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
 
-entity alu2_tb is
-end entity alu2_tb;
+entity ASALU_tb is
+end entity ASALU_tb;
 
-architecture sim of alu2_tb is
+architecture sim of ASALU_tb is
 
-  component alu2 is
+  component ASALU is
     port (
-      a      : in  std_logic_vector(7 downto 0);
-      b      : in  std_logic_vector(7 downto 0);
-      opcode : in  std_logic_vector(2 downto 0);
-      result : out std_logic_vector(7 downto 0);
-      c      : out std_logic;
-      z      : out std_logic;
-      n      : out std_logic;
-      v      : out std_logic
+      CLK   : in  std_logic;
+      A     : in  std_logic_vector(7 downto 0);
+      B     : in  std_logic_vector(7 downto 0);
+      Cmd   : in  std_logic_vector(3 downto 0);
+      Flow  : out std_logic_vector(7 downto 0);
+      FHigh : out std_logic_vector(7 downto 0);
+      Cout  : out std_logic;
+      Equal : out std_logic;
+      OV    : out std_logic;
+      Sign  : out std_logic;
+      CB    : out std_logic;
+      Ready : out std_logic;
+      CAN   : out std_logic
     );
   end component;
 
-  signal a      : std_logic_vector(7 downto 0) := (others => '0');
-  signal b      : std_logic_vector(7 downto 0) := (others => '0');
-  signal opcode : std_logic_vector(2 downto 0) := (others => '0');
-  signal result : std_logic_vector(7 downto 0);
-  signal c, z, n, v : std_logic;
-
-  constant SETTLE : time := 20 ns;
+  signal CLK   : std_logic := '0';
+  signal A     : std_logic_vector(7 downto 0) := (others => '0');
+  signal B     : std_logic_vector(7 downto 0) := (others => '0');
+  signal Cmd   : std_logic_vector(3 downto 0) := (others => '0');
+  signal Flow  : std_logic_vector(7 downto 0);
+  signal FHigh : std_logic_vector(7 downto 0);
+  signal Cout  : std_logic;
+  signal Equal : std_logic;
+  signal OV    : std_logic;
+  signal Sign  : std_logic;
+  signal CB    : std_logic;
+  signal Ready : std_logic;
+  signal CAN   : std_logic;
 
 begin
 
-  dut : alu2
-    port map (
-      a      => a,
-      b      => b,
-      opcode => opcode,
-      result => result,
-      c      => c,
-      z      => z,
-      n      => n,
-      v      => v
-    );
+  dut : ASALU port map (
+    CLK => CLK, A => A, B => B, Cmd => Cmd,
+    Flow => Flow, FHigh => FHigh, Cout => Cout, Equal => Equal,
+    OV => OV, Sign => Sign, CB => CB, Ready => Ready, CAN => CAN
+  );
+
+  clk_proc : process
+  begin
+    CLK <= '0'; wait for 5 ns;
+    CLK <= '1'; wait for 5 ns;
+  end process;
 
   stim : process
   begin
+    -- Note: single-cycle ops are combinational in this architecture.
+    -- wait until rising_edge(CLK) is kept for uniform pacing; results
+    -- are already valid before the edge.
+    wait until rising_edge(CLK);
 
-    -- ADD normal: 0x0F + 0x01 = 0x10, no flags
-    a <= x"0F"; b <= x"01"; opcode <= "000"; wait for SETTLE;
-    assert result = x"10" and c = '0' and z = '0' and n = '0' and v = '0'
-      report "FAIL ADD normal" severity failure;
+    -- ---- 0000: ADD ----
+    A <= x"0F"; B <= x"01"; Cmd <= "0000";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"10" and FHigh = x"00" and Cout = '0' and OV = '0' and Sign = '0'
+      report "FAIL 0000 ADD normal" severity failure;
 
-    -- ADD unsigned overflow: 0xFF + 0x01 = 0x00, C=1, Z=1
-    a <= x"FF"; b <= x"01"; opcode <= "000"; wait for SETTLE;
-    assert result = x"00" and c = '1' and z = '1' and n = '0' and v = '0'
-      report "FAIL ADD unsigned overflow" severity failure;
+    A <= x"FF"; B <= x"01"; Cmd <= "0000";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"00" and Cout = '1' and OV = '0'
+      report "FAIL 0000 ADD carry" severity failure;
 
-    -- ADD signed overflow: 0x7F + 0x01 = 0x80, N=1, V=1
-    a <= x"7F"; b <= x"01"; opcode <= "000"; wait for SETTLE;
-    assert result = x"80" and c = '0' and z = '0' and n = '1' and v = '1'
-      report "FAIL ADD signed overflow" severity failure;
+    A <= x"7F"; B <= x"01"; Cmd <= "0000";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"80" and Cout = '0' and OV = '1' and Sign = '1'
+      report "FAIL 0000 ADD signed OV" severity failure;
 
-    -- SUB normal: 0x10 - 0x01 = 0x0F, no flags
-    a <= x"10"; b <= x"01"; opcode <= "001"; wait for SETTLE;
-    assert result = x"0F" and c = '0' and z = '0' and n = '0' and v = '0'
-      report "FAIL SUB normal" severity failure;
+    -- ---- 0001: SUB ----
+    A <= x"10"; B <= x"01"; Cmd <= "0001";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"0F" and FHigh = x"00" and Cout = '0' and OV = '0' and Sign = '0'
+      report "FAIL 0001 SUB normal" severity failure;
 
-    -- SUB borrow: 0x00 - 0x01 = 0xFF, C=1, N=1
-    a <= x"00"; b <= x"01"; opcode <= "001"; wait for SETTLE;
-    assert result = x"FF" and c = '1' and z = '0' and n = '1' and v = '0'
-      report "FAIL SUB borrow" severity failure;
+    A <= x"00"; B <= x"01"; Cmd <= "0001";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"FF" and Cout = '1' and Sign = '1'
+      report "FAIL 0001 SUB borrow" severity failure;
 
-    -- SUB signed overflow: 0x80 - 0x01 = 0x7F, V=1
-    a <= x"80"; b <= x"01"; opcode <= "001"; wait for SETTLE;
-    assert result = x"7F" and c = '0' and z = '0' and n = '0' and v = '1'
-      report "FAIL SUB signed overflow" severity failure;
+    A <= x"80"; B <= x"01"; Cmd <= "0001";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"7F" and OV = '1'
+      report "FAIL 0001 SUB signed OV" severity failure;
 
-    -- AND: 0xAA and 0x0F = 0x0A
-    a <= x"AA"; b <= x"0F"; opcode <= "010"; wait for SETTLE;
-    assert result = x"0A" and c = '0' and z = '0' and n = '0' and v = '0'
-      report "FAIL AND" severity failure;
+    -- ---- 0010: (A+B)*2 ----
+    A <= x"02"; B <= x"03"; Cmd <= "0010";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"0A" and FHigh = x"00" and Cout = '0'
+      report "FAIL 0010 MUL2 normal" severity failure;
 
-    -- AND N=1: 0xFF and 0xFF = 0xFF
-    a <= x"FF"; b <= x"FF"; opcode <= "010"; wait for SETTLE;
-    assert result = x"FF" and c = '0' and z = '0' and n = '1' and v = '0'
-      report "FAIL AND N=1" severity failure;
+    A <= x"40"; B <= x"40"; Cmd <= "0010";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"00" and Cout = '1'
+      report "FAIL 0010 MUL2 overflow" severity failure;
 
-    -- OR N=1: 0xA0 or 0x0F = 0xAF
-    a <= x"A0"; b <= x"0F"; opcode <= "011"; wait for SETTLE;
-    assert result = x"AF" and c = '0' and z = '0' and n = '1' and v = '0'
-      report "FAIL OR" severity failure;
+    -- ---- 0011: (A+B)*4 ----
+    A <= x"02"; B <= x"02"; Cmd <= "0011";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"10" and FHigh = x"00" and Cout = '0'
+      report "FAIL 0011 MUL4 normal" severity failure;
 
-    -- XOR N=1: 0xFF xor 0x0F = 0xF0
-    a <= x"FF"; b <= x"0F"; opcode <= "100"; wait for SETTLE;
-    assert result = x"F0" and c = '0' and z = '0' and n = '1' and v = '0'
-      report "FAIL XOR N=1" severity failure;
+    A <= x"20"; B <= x"20"; Cmd <= "0011";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"00" and Cout = '1'
+      report "FAIL 0011 MUL4 overflow" severity failure;
 
-    -- XOR Z=1: 0xFF xor 0xFF = 0x00
-    a <= x"FF"; b <= x"FF"; opcode <= "100"; wait for SETTLE;
-    assert result = x"00" and c = '0' and z = '1' and n = '0' and v = '0'
-      report "FAIL XOR Z=1" severity failure;
+    -- ---- 0100: NEG ----
+    A <= x"AA"; B <= x"00"; Cmd <= "0100";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"56" and FHigh = x"00" and Cout = '0' and Sign = '0'
+      report "FAIL 0100 NEG positive" severity failure;
 
-    -- NOT: not 0xAA = 0x55
-    a <= x"AA"; b <= x"00"; opcode <= "101"; wait for SETTLE;
-    assert result = x"55" and c = '0' and z = '0' and n = '0' and v = '0'
-      report "FAIL NOT" severity failure;
+    A <= x"80"; B <= x"00"; Cmd <= "0100";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"80" and Cout = '1' and Sign = '1'
+      report "FAIL 0100 NEG sign" severity failure;
 
-    -- NOT Z=1: not 0xFF = 0x00
-    a <= x"FF"; b <= x"00"; opcode <= "101"; wait for SETTLE;
-    assert result = x"00" and c = '0' and z = '1' and n = '0' and v = '0'
-      report "FAIL NOT Z=1" severity failure;
+    -- ---- 0101: SLL ----
+    A <= x"01"; B <= x"00"; Cmd <= "0101";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"02" and Cout = '0'
+      report "FAIL 0101 SLL normal" severity failure;
 
-    -- SHL MSB lost, Z=1: 0x80 << 1 = 0x00
-    a <= x"80"; b <= x"00"; opcode <= "110"; wait for SETTLE;
-    assert result = x"00" and c = '0' and z = '1' and n = '0' and v = '0'
-      report "FAIL SHL Z=1" severity failure;
+    A <= x"80"; B <= x"00"; Cmd <= "0101";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"00" and Cout = '1'
+      report "FAIL 0101 SLL carry" severity failure;
 
-    -- SHR LSB lost, Z=1: 0x01 >> 1 = 0x00
-    a <= x"01"; b <= x"00"; opcode <= "111"; wait for SETTLE;
-    assert result = x"00" and c = '0' and z = '1' and n = '0' and v = '0'
-      report "FAIL SHR Z=1" severity failure;
+    -- ---- 0110: SLR ----
+    A <= x"80"; B <= x"00"; Cmd <= "0110";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"40" and Cout = '0' and Sign = '0'
+      report "FAIL 0110 SLR normal" severity failure;
+
+    A <= x"01"; B <= x"00"; Cmd <= "0110";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"00" and Cout = '1'
+      report "FAIL 0110 SLR carry" severity failure;
+
+    -- ---- 0111: RLL ----
+    A <= x"80"; B <= x"00"; Cmd <= "0111";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"01" and FHigh = x"00"
+      report "FAIL 0111 RLL wrap" severity failure;
+
+    A <= x"01"; B <= x"00"; Cmd <= "0111";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"02"
+      report "FAIL 0111 RLL normal" severity failure;
+
+    -- ---- 1000: RLR ----
+    A <= x"01"; B <= x"00"; Cmd <= "1000";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"80" and FHigh = x"00"
+      report "FAIL 1000 RLR wrap" severity failure;
+
+    A <= x"80"; B <= x"00"; Cmd <= "1000";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"40"
+      report "FAIL 1000 RLR normal" severity failure;
+
+    -- ---- 1001: MUL ----
+    A <= x"03"; B <= x"05"; Cmd <= "1001";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"0F" and FHigh = x"00" and Sign = '0'
+      report "FAIL 1001 MUL small" severity failure;
+
+    A <= x"FF"; B <= x"FF"; Cmd <= "1001";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"01" and FHigh = x"FE" and Sign = '1'
+      report "FAIL 1001 MUL large" severity failure;
+
+    -- ---- 1010: NAND ----
+    A <= x"FF"; B <= x"FF"; Cmd <= "1010";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"00" and FHigh = x"00"
+      report "FAIL 1010 NAND all-ones" severity failure;
+
+    A <= x"AA"; B <= x"55"; Cmd <= "1010";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"FF"
+      report "FAIL 1010 NAND no-overlap" severity failure;
+
+    -- ---- 1011: XOR ----
+    A <= x"FF"; B <= x"0F"; Cmd <= "1011";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"F0" and FHigh = x"00"
+      report "FAIL 1011 XOR" severity failure;
+
+    A <= x"FF"; B <= x"FF"; Cmd <= "1011";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Flow = x"00" and Sign = '0'
+      report "FAIL 1011 XOR zero" severity failure;
+
+    -- ---- Equal (kombinatorisch) ----
+    A <= x"42"; B <= x"42"; Cmd <= "0000";
+    wait for 1 ns;
+    assert Equal = '1' report "FAIL Equal A=B" severity failure;
+
+    A <= x"42"; B <= x"43"; Cmd <= "0000";
+    wait for 1 ns;
+    assert Equal = '0' report "FAIL Equal A/=B" severity failure;
+
+    -- ---- 1100: WriteRAM + 1101: CRC_MEM ----
+    A <= x"FF"; B <= x"00"; Cmd <= "1100";
+    wait until rising_edge(CLK); wait for 1 ns;
+
+    A <= x"AA"; B <= x"01"; Cmd <= "1100";
+    wait until rising_edge(CLK); wait for 1 ns;
+
+    -- CRC-15 of mem[0x00..0x00] = CRC(0xFF) = 0x0095
+    A <= x"00"; B <= x"00"; Cmd <= "1101";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert CB = '1' and Ready = '0'
+      report "FAIL 1101 CRC not started" severity failure;
+    wait until Ready = '1'; wait for 1 ns;
+    assert Flow = x"95" and FHigh = x"00" and CB = '0'
+      report "FAIL 1101 CRC result (expected 0x0095 for 0xFF)" severity failure;
+
+    -- ---- 1110: SendCANData ----
+    -- Sends: can_reg_20a (19-bit, all-zero) + mem[0x00..0x01] (2 bytes)
+    -- Total: 19 + 16 = 35 clock cycles
+    A <= x"00"; B <= x"01"; Cmd <= "1110";
+    wait until rising_edge(CLK); wait for 1 ns;
+    assert Ready = '0' report "FAIL 1110 SendCAN not started" severity failure;
+    wait until Ready = '1'; wait for 1 ns;
+    assert Ready = '1' report "FAIL 1110 SendCAN not done" severity failure;
 
     report "Simulation complete -- all assertions passed";
     wait;
