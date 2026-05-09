@@ -77,10 +77,10 @@ make view
 | ALU 2 spec (`doc/alu2-spec.md`) | Drafted — confirm G5 port widths + op set |
 | `alu1.vhd` | Done — pure concurrent, 8 ops, carry output |
 | `alu1_tb.vhd` | Done — 10 vectors, all pass GHDL |
-| `alu2.vhd` | TODO |
-| `alu2_tb.vhd` | TODO |
+| `alu2.vhd` | Done — pure concurrent, 8 ops, C/Z/N/V flags |
+| `alu2_tb.vhd` | Done — 15 vectors, all pass GHDL |
 | ALU 1 GHDL simulation | Passing — `@200ns: Simulation complete -- all assertions passed` |
-| ALU 2 GHDL simulation | TODO |
+| ALU 2 GHDL simulation | Passing — `@300ns: Simulation complete -- all assertions passed` |
 | ISim screenshots (both ALUs) | TODO |
 
 ---
