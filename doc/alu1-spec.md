@@ -1,75 +1,103 @@
-# ALU 1 — G5 Specification (Teilaufgabe 1)
+# ALU 1 — ASALU Specification (Teilaufgabe a)
 
-## Group parameters (confirmed from G5table.png)
+## Gruppe / Entwurfsziel
 
-| Parameter | Value |
-|---|---|
-| Device | Spartan3E 500 |
-| Entwurfsziel | **Maximale Nebenläufigkeit** |
-
-**Maximale Nebenläufigkeit** means every operation is computed simultaneously as a concurrent signal assignment. A final `with opcode select` muxes the pre-computed result. Zero processes in the architecture.
-
----
-
-## Port interface
-
-| Port | Direction | Width | Description |
-|---|---|---|---|
-| `a` | in | 8 bits | Operand A |
-| `b` | in | 8 bits | Operand B |
-| `opcode` | in | 3 bits | Selects operation (8 ops) |
-| `result` | out | 8 bits | Computed result |
-| `carry` | out | 1 bit | Carry/borrow from ADD/SUB; '0' for all other ops |
-
-> **Confirm with assignment sheet:** bit widths and exact operation set for G5 Teilaufgabe 1.  
-> The implementation below uses standard 8 ops — swap in/out as needed.
+| Parameter      | Wert                      |
+|----------------|---------------------------|
+| Gruppe         | G5                        |
+| Device         | Spartan3E 500             |
+| Entwurfsziel   | Maximale Nebenläufigkeit  |
+| Architektur    | `behavioral` (TopLevel)   |
+| Aufgabenblatt  | A_VHDL_P3-a_v_unlocked.pdf |
 
 ---
 
-## Operation table
+## Entity ASALU — Ports
 
-| Opcode | Mnemonic | Expression |
-|---|---|---|
-| `000` | ADD | `a + b` (carry = bit 8) |
-| `001` | SUB | `a - b` (carry = borrow bit 8) |
-| `010` | AND | `a and b` |
-| `011` | OR  | `a or b` |
-| `100` | XOR | `a xor b` |
-| `101` | NOT | `not a` (b ignored) |
-| `110` | SHL | `a` shifted left 1, LSB = '0' |
-| `111` | SHR | `a` shifted right 1, MSB = '0' |
+| Port    | Richt. | Breite | Beschreibung                                      |
+|---------|--------|--------|---------------------------------------------------|
+| CLK     | in     | 1      | Takt (steigende Flanke)                           |
+| A       | in     | 8      | Operand A / RAM-Startadresse (CRC, CAN)           |
+| B       | in     | 8      | Operand B / RAM-Adresse (WriteRAM) / Endadresse   |
+| Cmd     | in     | 4      | Befehlscode (16 Ops, Befehlstabelle 1+2)          |
+| Flow    | out    | 8      | Ergebnis Low-Byte                                 |
+| FHigh   | out    | 8      | Ergebnis High-Byte (belegt bei MUL, CRC)          |
+| Cout    | out    | 1      | Carry / Borrow / herausgeschobenes Bit            |
+| Equal   | out    | 1      | A = B (kombinatorisch, taktunabhängig)            |
+| OV      | out    | 1      | Signed Overflow (ADD / SUB)                       |
+| Sign    | out    | 1      | MSB des Ergebnisses                               |
+| CB      | out    | 1      | CRCBusy — '1' während CRC_MEM                    |
+| Ready   | out    | 1      | '0' während CRC_MEM / SendCANData, sonst '1'     |
+| CAN     | out    | 1      | Serieller CAN-Datenausgang                        |
 
 ---
 
-## Architecture: Maximale Nebenläufigkeit
+## Befehlstabelle
 
-All intermediate results are declared as internal signals and driven by concurrent signal assignments — hardware computes all 8 operations in parallel every clock-less cycle. A single `with opcode select` muxes `result` and `carry` from the pre-computed values. No `process` blocks.
+| Cmd  | Mnemonik     | Operation                       | Cout              | OV         | Sign     |
+|------|--------------|---------------------------------|-------------------|------------|----------|
+| 0000 | ADD          | F = A + B                       | Carry             | Signed OVF | MSB      |
+| 0001 | SUB          | F = A − B                       | Borrow            | Signed OVF | MSB      |
+| 0010 | MUL2         | F = (A+B) × 2                   | sum[8]\|[7]       | 0          | MSB      |
+| 0011 | MUL4         | F = (A+B) × 4                   | sum[8]\|[7]\|[6]  | 0          | MSB      |
+| 0100 | NEG          | F = −A (2er-Komplement)         | Sign              | 0          | MSB      |
+| 0101 | SLL          | F = A << 1                      | A[7]              | 0          | MSB      |
+| 0110 | SLR          | F = A >> 1                      | A[0]              | 0          | 0        |
+| 0111 | RLL          | F = rotate_left(A)              | 0                 | 0          | MSB      |
+| 1000 | RLR          | F = rotate_right(A)             | 0                 | 0          | MSB      |
+| 1001 | MUL          | F = A × B → 16-bit              | 0                 | 0          | FHigh[7] |
+| 1010 | NAND         | F = NOT(A AND B)                | 0                 | 0          | MSB      |
+| 1011 | XOR          | F = A XOR B                     | 0                 | 0          | MSB      |
+| 1100 | WriteRAM     | mem[B] ← A                     | 0                 | 0          | 0        |
+| 1101 | CRC_MEM      | CRC-15 von mem[A..B] → Flow     | 0                 | 0          | MSB      |
+| 1110 | SendCANData  | Reg + mem[A..B] seriell → CAN  | —                 | —          | —        |
+| 1111 | Reserved     | —                               | 0                 | 0          | 0        |
+
+**MUL:** FHigh = High-Byte, Flow = Low-Byte (16-bit unsigned).  
+**CRC_MEM:** CAN-CRC-15, Polynom 0x4599 (ISO 11898). FHigh[7] = '0' (Padding, da 15-bit).  
+**SendCANData:** Serialisiert zuerst CAN-Register (20A: 19-bit oder 20B: 39-bit), dann mem[A..B].  
+CRC wird nicht automatisch angehängt — CRC_MEM und SendCANData sind eigenständige Befehle.
+
+---
+
+## Interne Signale
+
+| Signal        | Breite     | Zweck                                     |
+|---------------|------------|-------------------------------------------|
+| mem           | 256 × 8 b  | RAM-Speicherblock                         |
+| state         | enum       | IDLE / CRC\_COMPUTE / CAN\_SEND           |
+| crc\_reg      | 15 b       | CRC-Schieberegister                       |
+| crc\_addr/end | 8 b        | Lauf- / End-Adresse CRC                   |
+| can\_reg\_20a | 19 b       | CAN 2.0A Frame-Header (Standard Frame)    |
+| can\_reg\_20b | 39 b       | CAN 2.0B Frame-Header (Extended Frame)    |
+| can\_mode     | 1 b        | '0' = 2.0A, '1' = 2.0B                   |
+| can\_phase    | 1 b        | '0' = Header senden, '1' = mem senden    |
+| can\_reg\_ptr | int 0..38  | Bit-Position im CAN-Register              |
+| can\_addr/end | 8 b        | Lauf- / End-Adresse CAN-Send              |
+| can\_byte/bit | 8 b / int  | Aktuelles Byte und Bit-Position           |
+
+---
+
+## State Machine
 
 ```
-a, b ──┬──► [ADD]──────┐
-       ├──► [SUB]──────┤
-       ├──► [AND]──────┤
-       ├──► [OR] ──────┼──► with opcode select ──► result
-       ├──► [XOR]──────┤
-       ├──► [NOT]──────┤
-       ├──► [SHL]──────┤
-       └──► [SHR]──────┘
-opcode ─────────────────────► select
+IDLE ──[Cmd=1101]──► CRC_COMPUTE ──(addr=end)──► IDLE
+IDLE ──[Cmd=1110]──► CAN_SEND   ──(alle Bits)──► IDLE
 ```
+
+- **CRC_COMPUTE:** 1 Byte/Takt, CAN-CRC-15 (0x4599), CB='1', Ready='0'
+- **CAN_SEND Phase 0:** CAN-Register seriell (MSB first), Ready='0'
+- **CAN_SEND Phase 1:** mem[A..B] seriell (MSB first), Ready='0'
 
 ---
 
-## Test vectors (used in alu1_tb.vhd)
+## GHDL Simulation
 
-| a (hex) | b (hex) | opcode | Expected result (hex) | carry | Note |
-|---|---|---|---|---|---|
-| `0x0F` | `0x01` | `000` | `0x10` | '0' | ADD no carry |
-| `0xFF` | `0x01` | `000` | `0x00` | '1' | ADD overflow → carry=1 |
-| `0x10` | `0x01` | `001` | `0x0F` | '0' | SUB no borrow |
-| `0x00` | `0x01` | `001` | `0xFF` | '1' | SUB underflow → borrow=1 |
-| `0xAA` | `0x0F` | `010` | `0x0A` | '0' | AND |
-| `0xA0` | `0x0F` | `011` | `0xAF` | '0' | OR |
-| `0xFF` | `0x0F` | `100` | `0xF0` | '0' | XOR |
-| `0xAA` | `0x00` | `101` | `0x55` | '0' | NOT a |
-| `0x01` | `0x00` | `110` | `0x02` | '0' | SHL |
-| `0x80` | `0x00` | `111` | `0x40` | '0' | SHR |
+```
+ghdl -a --std=08 src/alu1.vhd
+ghdl -a --std=08 src/alu1_tb.vhd
+ghdl -e --std=08 ASALU_tb
+ghdl -r --std=08 ASALU_tb --wave=sim/alu1.ghw
+```
+
+Ergebnis: `@476ns: Simulation complete -- all assertions passed` (27 Testvektoren)
