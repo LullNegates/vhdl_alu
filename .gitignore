@@ -1,0 +1,16 @@
+# GHDL build artefacts
+*.cf
+e~*
+
+# Simulation output
+**/*.ghw
+**/*.vcd
+
+# GTKWave save files
+*.gtkw
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
