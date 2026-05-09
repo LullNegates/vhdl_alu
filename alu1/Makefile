@@ -1,7 +1,7 @@
 GHDL    := ghdl
 STD     := --std=08
 SIMDIR  := sim
-TOP     := alu1_tb
+TOP     := ASALU_tb
 WAVE    := $(SIMDIR)/alu1.ghw
 
 SRCS := src/alu1.vhd \
