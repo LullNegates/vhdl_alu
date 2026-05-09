@@ -1,108 +1,206 @@
-# ALU 2 — G5 Specification (Teilaufgabe 2)
+# ALU 2 — ASALU Specification (Teilaufgabe b)
 
-> Items marked **[CONFIRM]** need verification against the G5 assignment sheet before coding.
+## Gruppe / Entwurfsziel
 
----
-
-## Group parameters
-
-| Parameter      | Value                       |
-|----------------|-----------------------------|
-| Device         | Spartan3E 500               |
-| Entwurfsziel   | Maximale Nebenläufigkeit    |
-
----
-
-## Port interface **[CONFIRM widths from G5 sheet]**
-
-| Port     | Direction | Width | Description                               |
-|----------|-----------|-------|-------------------------------------------|
-| `a`      | in        | 8     | Operand A                                 |
-| `b`      | in        | 8     | Operand B                                 |
-| `opcode` | in        | 3     | Selects operation (8 ops → 3 bits)        |
-| `result` | out       | 8     | Computed result                           |
-| `c`      | out       | 1     | Carry flag (ADD overflow / SUB borrow)    |
-| `z`      | out       | 1     | Zero flag  (`result = 0x00`)              |
-| `n`      | out       | 1     | Negative flag (MSB of result)             |
-| `v`      | out       | 1     | Signed overflow flag                      |
+| Parameter      | Wert                      |
+|----------------|---------------------------|
+| Gruppe         | G5                        |
+| Device         | Spartan3E 500             |
+| Entwurfsziel   | Maximale Nebenläufigkeit  |
+| Architektur    | `structural` (TopLevel)   |
+| Aufgabenblatt  | A_VHDL_P3-b_v_unlocked.pdf |
 
 ---
 
-## Operation table **[CONFIRM opcode encoding from G5 sheet]**
+## Entity ASALU — Ports
 
-| Opcode | Mnemonic | Expression              | C       | Z              | N           | V                   |
-|--------|----------|-------------------------|---------|----------------|-------------|---------------------|
-| `000`  | ADD      | `a + b`                 | bit 8   | result = 0     | result(7)   | signed OVF formula  |
-| `001`  | SUB      | `a - b`                 | bit 8   | result = 0     | result(7)   | signed OVF formula  |
-| `010`  | AND      | `a and b`               | `'0'`   | result = 0     | result(7)   | `'0'`               |
-| `011`  | OR       | `a or b`                | `'0'`   | result = 0     | result(7)   | `'0'`               |
-| `100`  | XOR      | `a xor b`               | `'0'`   | result = 0     | result(7)   | `'0'`               |
-| `101`  | NOT      | `not a`                 | `'0'`   | result = 0     | result(7)   | `'0'`               |
-| `110`  | SHL      | `a(6:0) & '0'`          | `'0'`   | result = 0     | result(7)   | `'0'`               |
-| `111`  | SHR      | `'0' & a(7:1)`          | `'0'`   | result = 0     | result(7)   | `'0'`               |
+Identisch mit ALU 1 (behavioral):
+
+| Port    | Richt. | Breite | Beschreibung                                      |
+|---------|--------|--------|---------------------------------------------------|
+| CLK     | in     | 1      | Takt (steigende Flanke)                           |
+| A       | in     | 8      | Operand A / RAM-Startadresse (CRC, CAN)           |
+| B       | in     | 8      | Operand B / RAM-Adresse (WriteRAM) / Endadresse   |
+| Cmd     | in     | 4      | Befehlscode (16 Ops, Befehlstabelle)              |
+| Flow    | out    | 8      | Ergebnis Low-Byte                                 |
+| FHigh   | out    | 8      | Ergebnis High-Byte (belegt bei MUL, CRC)          |
+| Cout    | out    | 1      | Carry / Borrow / herausgeschobenes Bit            |
+| Equal   | out    | 1      | A = B (kombinatorisch, taktunabhängig)            |
+| OV      | out    | 1      | Signed Overflow (ADD / SUB)                       |
+| Sign    | out    | 1      | MSB des Ergebnisses                               |
+| CB      | out    | 1      | CRCBusy — '1' während CRC_MEM                    |
+| Ready   | out    | 1      | '0' während CRC_MEM / SendCANData, sonst '1'     |
+| CAN     | out    | 1      | Serieller CAN-Datenausgang                        |
 
 ---
 
-## Architecture: Maximale Nebenläufigkeit
+## Befehlstabelle
 
-All intermediate results are declared as internal signals and driven by concurrent signal
-assignments. An internal `result_i` signal holds the mux output so that Z, N, V flags
-can be derived from it without a feedback loop on the output port.
+Identisch mit ALU 1:
+
+| Cmd  | Mnemonik     | Operation                       | Cout              | OV         | Sign     |
+|------|--------------|---------------------------------|-------------------|------------|----------|
+| 0000 | ADD          | F = A + B                       | Carry             | Signed OVF | MSB      |
+| 0001 | SUB          | F = A − B                       | Borrow            | Signed OVF | MSB      |
+| 0010 | MUL2         | F = (A+B) × 2                   | sum[8]\|[7]       | 0          | MSB      |
+| 0011 | MUL4         | F = (A+B) × 4                   | sum[8]\|[7]\|[6]  | 0          | MSB      |
+| 0100 | NEG          | F = −A (2er-Komplement)         | Sign              | 0          | MSB      |
+| 0101 | SLL          | F = A << 1                      | A[7]              | 0          | MSB      |
+| 0110 | SLR          | F = A >> 1                      | A[0]              | 0          | 0        |
+| 0111 | RLL          | F = rotate_left(A)              | 0                 | 0          | MSB      |
+| 1000 | RLR          | F = rotate_right(A)             | 0                 | 0          | MSB      |
+| 1001 | MUL          | F = A × B → 16-bit              | 0                 | 0          | FHigh[7] |
+| 1010 | NAND         | F = NOT(A AND B)                | 0                 | 0          | MSB      |
+| 1011 | XOR          | F = A XOR B                     | 0                 | 0          | MSB      |
+| 1100 | WriteRAM     | mem[B] ← A                     | 0                 | 0          | 0        |
+| 1101 | CRC_MEM      | CRC-15 von mem[A..B] → Flow     | 0                 | 0          | MSB      |
+| 1110 | SendCANData  | Reg + mem[A..B] seriell → CAN  | —                 | —          | —        |
+| 1111 | Reserved     | —                               | 0                 | 0          | 0        |
+
+---
+
+## Architektur: structural — 7 Sub-Entities
+
+Jede einzelzyklische Operation wird **gleichzeitig** in einer eigenen Sub-Entity berechnet.
+Der `result_mux` wählt per `with Cmd select` das Ergebnis aus.
+`mem_ctrl` verwaltet alle mehrzyklischen Operationen (Cmd 1100–1110).
 
 ```
-a, b ──┬──► [ADD 9-bit] ─────────────────────────────────► res_add(8:0)
-       ├──► [SUB 9-bit] ─────────────────────────────────► res_sub(8:0)
-       ├──► [AND]  ──────────────────────────────────────► res_and
-       ├──► [OR]   ──────────────────────────────────────► res_or
-       ├──► [XOR]  ──────────────────────────────────────► res_xor
-       ├──► [NOT]  ──────────────────────────────────────► res_not
-       ├──► [SHL]  ──────────────────────────────────────► res_shl
-       └──► [SHR]  ──────────────────────────────────────► res_shr
+A, B ──┬──► arith_unit ──► sum9(8:0), diff9(8:0), res_mul2, res_mul4, res_neg
+       ├──► mul_unit   ──► product(15:0)
+       ├──► shift_unit ──► res_sll, res_slr, res_rll, res_rlr
+       └──► logic_unit ──► res_nand, res_xor
 
-opcode ─────────────────────────────────────────────────► with/select
-                                                               │
-                                         result_i (8-bit) ◄───┘
-                                                │
-                              ┌─────────────────┼───────────────┐
-                              ▼                 ▼               ▼
-                           result             Z, N flag       V flag
-                                           (concurrent)    (concurrent)
+Cmd ───────► result_mux ──► s_flow(7:0), s_fhigh(7:0)
+                          │
+             flag_gen ◄───┘ (sum9, diff9, res_neg, product, flow_out)
+                          │
+                          ▼
+                    Cout, OV, Sign
 
-                C ◄── carry with/select (opcode=ADD→res_add(8), SUB→res_sub(8), else '0')
+CLK, A, B, Cmd ──► mem_ctrl ──► mc_flow, mc_fhigh, mc_cout, mc_ov,
+                                 mc_sign, mc_cb, mc_ready, mc_can,
+                                 mc_active
 ```
 
-### Signed overflow (V) logic
+### Ausgabe-Routing
 
 ```
-ADD:  V = (not a(7) and not b(7) and result_i(7))
-          or (a(7) and b(7) and not result_i(7))
+Equal  ← '1' when A = B else '0'   (rein kombinatorisch, kein CLK)
+CB     ← mc_cb
+Ready  ← mc_ready
+CAN    ← mc_can
 
-SUB:  V = (not a(7) and b(7) and result_i(7))
-          or (a(7) and not b(7) and not result_i(7))
-
-all other ops: V = '0'
+Flow   ← mc_flow   when mc_active='1' else s_flow
+FHigh  ← mc_fhigh  when mc_active='1' else s_fhigh
+Cout   ← mc_cout   when mc_active='1' else s_cout
+OV     ← mc_ov     when mc_active='1' else s_ov
+Sign   ← mc_sign   when mc_active='1' else s_sign
 ```
 
-Expressed as a single `with opcode select v <=` — no process.
+**mc_active** (kombinatorisch in mem_ctrl):
+```
+mc_active = '1' when (state ≠ IDLE) or (Cmd = "1100" or "1101" or "1110")
+```
 
 ---
 
-## Test vectors (for alu2_tb.vhd)
+## Sub-Entity-Beschreibungen
 
-| a      | b      | op    | result | C | Z | N | V | Note                           |
-|--------|--------|-------|--------|---|---|---|---|--------------------------------|
-| `0x0F` | `0x01` | `000` | `0x10` | 0 | 0 | 0 | 0 | ADD normal                     |
-| `0xFF` | `0x01` | `000` | `0x00` | 1 | 1 | 0 | 0 | ADD unsigned overflow, Z=1     |
-| `0x7F` | `0x01` | `000` | `0x80` | 0 | 0 | 1 | 1 | ADD signed overflow, N=1, V=1  |
-| `0x10` | `0x01` | `001` | `0x0F` | 0 | 0 | 0 | 0 | SUB normal                     |
-| `0x00` | `0x01` | `001` | `0xFF` | 1 | 0 | 1 | 0 | SUB borrow, N=1                |
-| `0x80` | `0x01` | `001` | `0x7F` | 0 | 0 | 0 | 1 | SUB signed overflow, V=1       |
-| `0xAA` | `0x0F` | `010` | `0x0A` | 0 | 0 | 0 | 0 | AND                            |
-| `0xFF` | `0xFF` | `010` | `0xFF` | 0 | 0 | 1 | 0 | AND N=1                        |
-| `0xA0` | `0x0F` | `011` | `0xAF` | 0 | 0 | 1 | 0 | OR N=1                         |
-| `0xFF` | `0x0F` | `100` | `0xF0` | 0 | 0 | 1 | 0 | XOR N=1                        |
-| `0xFF` | `0xFF` | `100` | `0x00` | 0 | 1 | 0 | 0 | XOR Z=1                        |
-| `0xAA` | `0x00` | `101` | `0x55` | 0 | 0 | 0 | 0 | NOT                            |
-| `0xFF` | `0x00` | `101` | `0x00` | 0 | 1 | 0 | 0 | NOT Z=1                        |
-| `0x80` | `0x00` | `110` | `0x00` | 0 | 1 | 0 | 0 | SHL MSB lost, Z=1              |
-| `0x01` | `0x00` | `111` | `0x00` | 0 | 1 | 0 | 0 | SHR LSB lost, Z=1              |
+### arith_unit
+Berechnet ADD, SUB, MUL2, MUL4, NEG alle gleichzeitig:
+- `sum9 = ('0' & A) + ('0' & B)` — 9-bit für Carry-Erkennung
+- `diff9 = ('0' & A) − ('0' & B)` — 9-bit für Borrow-Erkennung
+- `res_mul2 = sum9(6:0) & '0'`
+- `res_mul4 = sum9(5:0) & "00"`
+- `res_neg = -signed(A)` (2er-Komplement)
+
+### mul_unit
+`product = unsigned(A) * unsigned(B)` — 16-bit unsigned Multiplikation.
+
+### shift_unit
+- `res_sll = A(6:0) & '0'`
+- `res_slr = '0' & A(7:1)`
+- `res_rll = A(6:0) & A(7)`
+- `res_rlr = A(0) & A(7:1)`
+
+### logic_unit
+- `res_nand = not (A and B)`
+- `res_xor = A xor B`
+
+### result_mux
+`with Cmd select flow_out` — wählt das Ergebnis-Byte aus allen Sub-Units.
+`fhigh_out` ist nur bei MUL (product(15:8)) belegt, sonst 0x00.
+
+### flag_gen
+Berechnet Cout, OV, Sign kombinatorisch aus den Sub-Unit-Outputs:
+
+**Cout:**
+| Cmd | Quelle |
+|-----|--------|
+| 0000 ADD | sum9(8) |
+| 0001 SUB | diff9(8) |
+| 0010 MUL2 | sum9(8) or sum9(7) |
+| 0011 MUL4 | sum9(8) or sum9(7) or sum9(6) |
+| 0100 NEG | res_neg(7) |
+| 0101 SLL | A(7) |
+| 0110 SLR | A(0) |
+| sonst | '0' |
+
+**OV (Signed Overflow):**
+```
+ADD: (not A(7) and not B(7) and sum9(7)) or (A(7) and B(7) and not sum9(7))
+SUB: (not A(7) and B(7) and diff9(7)) or (A(7) and not B(7) and not diff9(7))
+sonst: '0'
+```
+
+**Sign:**
+- SLR → immer '0'
+- MUL → product(15)
+- sonst → flow_out(7)
+
+### mem_ctrl
+Verwaltet RAM (256×8 bit), CRC-Engine und CAN-Serializer.
+Läuft in einem getakteten Prozess; alle Outputs defaulten zu 0/1/0 in IDLE.
+
+**Interne Signale:**
+
+| Signal        | Breite     | Zweck                                     |
+|---------------|------------|-------------------------------------------|
+| mem           | 256 × 8 b  | RAM-Speicherblock                         |
+| state         | enum       | IDLE / CRC\_COMPUTE / CAN\_SEND           |
+| crc\_reg      | 15 b       | CRC-Schieberegister                       |
+| crc\_addr/end | 8 b        | Lauf- / End-Adresse CRC                   |
+| can\_reg\_20a | 19 b       | CAN 2.0A Frame-Header (Standard Frame)    |
+| can\_reg\_20b | 39 b       | CAN 2.0B Frame-Header (Extended Frame)    |
+| can\_mode     | 1 b        | '0' = 2.0A, '1' = 2.0B                   |
+| can\_phase    | 1 b        | '0' = Header senden, '1' = mem senden    |
+| can\_reg\_ptr | int 0..38  | Bit-Position im CAN-Register              |
+| can\_addr/end | 8 b        | Lauf- / End-Adresse CAN-Send             |
+| can\_byte/bit | 8 b / int  | Aktuelles Byte und Bit-Position           |
+
+---
+
+## State Machine (in mem_ctrl)
+
+```
+IDLE ──[Cmd=1101]──► CRC_COMPUTE ──(addr=end)──► IDLE
+IDLE ──[Cmd=1110]──► CAN_SEND   ──(alle Bits)──► IDLE
+```
+
+- **CRC_COMPUTE:** 1 Byte/Takt, CAN-CRC-15 (Polynom 0x4599, ISO 11898), CB='1', Ready='0'
+- **CAN_SEND Phase 0:** CAN-Register seriell (MSB first), Ready='0'
+- **CAN_SEND Phase 1:** mem[A..B] seriell (MSB first), Ready='0'
+
+---
+
+## GHDL Simulation
+
+```
+ghdl -a --std=08 src/alu2.vhd
+ghdl -a --std=08 src/alu2_tb.vhd
+ghdl -e --std=08 ASALU_tb
+ghdl -r --std=08 ASALU_tb --wave=sim/alu2.ghw
+```
+
+Ergebnis: `@666ns: Simulation complete -- all assertions passed` (27 Testvektoren)
