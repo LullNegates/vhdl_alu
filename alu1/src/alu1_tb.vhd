@@ -260,3 +260,9 @@ begin
   end process stim;
 
 end architecture sim;
+
+configuration cfg_behavioral of ASALU_behavioral_tb is
+  for sim
+    for dut : ASALU use entity work.ASALU(behavioral); end for;
+  end for;
+end configuration cfg_behavioral;
