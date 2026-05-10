@@ -2,10 +2,10 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
-entity ASALU_tb is
-end entity ASALU_tb;
+entity ASALU_behavioral_tb is
+end entity ASALU_behavioral_tb;
 
-architecture sim of ASALU_tb is
+architecture sim of ASALU_behavioral_tb is
 
   component ASALU is
     port (
