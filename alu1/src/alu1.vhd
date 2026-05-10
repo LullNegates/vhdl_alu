@@ -2,25 +2,6 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
--- Entity as defined in assignment (A_VHDL_P3-a_v_unlocked.pdf)
-entity ASALU is
-  port (
-    CLK   : in  std_logic;
-    A     : in  std_logic_vector(7 downto 0);
-    B     : in  std_logic_vector(7 downto 0);
-    Cmd   : in  std_logic_vector(3 downto 0);
-    Flow  : out std_logic_vector(7 downto 0);   -- result low byte
-    FHigh : out std_logic_vector(7 downto 0);   -- result high byte (non-zero for MUL/CRC)
-    Cout  : out std_logic;
-    Equal : out std_logic;
-    OV    : out std_logic;
-    Sign  : out std_logic;
-    CB    : out std_logic;   -- CRCBusy
-    Ready : out std_logic;
-    CAN   : out std_logic
-  );
-end entity ASALU;
-
 -- Architecture 1: Verhaltensbeschreibung (behavioral, TopLevel)
 -- All 16 operations from Befehlstabelle 1+2, clocked design.
 -- Multi-cycle ops (CRC_MEM, SendCANData) use a state machine; Ready='0' while busy.
