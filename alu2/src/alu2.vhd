@@ -249,6 +249,8 @@ architecture rtl of mem_ctrl is
 
 begin
 
+  -- Cmd check covers the IDLE cycle where a memory op fires: state is still IDLE
+  -- but outputs must already be gated away from the combinational sub-units.
   mc_active <= '1' when (state /= IDLE) or
                         (Cmd = "1100" or Cmd = "1101" or Cmd = "1110")
                else '0';
@@ -315,7 +317,7 @@ begin
           crc_reg <= crc_v;
           if crc_addr = crc_end then
             mc_flow  <= crc_v(7 downto 0);
-            mc_fhigh <= '0' & crc_v(14 downto 8);
+            mc_fhigh <= '0' & crc_v(14 downto 8);  -- CRC-15 is 15 bit; MSB of FHigh unused
             mc_sign  <= crc_v(14);
             mc_cb    <= '0';
             mc_ready <= '1';
@@ -486,6 +488,8 @@ begin
   OV    <= mc_ov    when mc_active = '1' else s_ov;
   Sign  <= mc_sign  when mc_active = '1' else s_sign;
 
+  -- Sub-units below are intentionally clockless: purely combinational, all results
+  -- available within the same cycle. result_mux selects the active output by Cmd.
   u_arith : arith_unit port map (
     A => A, B => B,
     sum9 => s_sum9, diff9 => s_diff9,

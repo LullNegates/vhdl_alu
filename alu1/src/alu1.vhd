@@ -62,6 +62,7 @@ begin
               Flow  <= sum9(7 downto 0);
               FHigh <= (others => '0');
               Cout  <= sum9(8);
+              -- signed overflow: pos+pos=neg or neg+neg=pos (two's-complement)
               OV    <= (not A(7) and not B(7) and     sum9(7)) or
                        (    A(7) and     B(7) and not sum9(7));
               Sign  <= sum9(7);
@@ -71,6 +72,7 @@ begin
               Flow  <= diff9(7 downto 0);
               FHigh <= (others => '0');
               Cout  <= diff9(8);
+              -- signed overflow: pos-neg=neg or neg-pos=pos
               OV    <= (not A(7) and     B(7) and     diff9(7)) or
                        (    A(7) and not B(7) and not diff9(7));
               Sign  <= diff9(7);
@@ -80,6 +82,7 @@ begin
               res8 := sum9(6 downto 0) & '0';
               Flow  <= res8;
               FHigh <= (others => '0');
+              -- Cout: left-shift drops sum9(7); also set if sum9(8) (pre-shift carry)
               Cout  <= sum9(8) or sum9(7);
               OV    <= '0';
               Sign  <= res8(7);
@@ -89,6 +92,7 @@ begin
               res8 := sum9(5 downto 0) & "00";
               Flow  <= res8;
               FHigh <= (others => '0');
+              -- Cout: left-shift by 2 drops sum9(7) and sum9(6)
               Cout  <= sum9(8) or sum9(7) or sum9(6);
               OV    <= '0';
               Sign  <= res8(7);
@@ -212,7 +216,7 @@ begin
           crc_reg <= crc_v;
           if crc_addr = crc_end then
             Flow  <= crc_v(7 downto 0);
-            FHigh <= '0' & crc_v(14 downto 8);
+            FHigh <= '0' & crc_v(14 downto 8);  -- CRC-15 is 15 bit; MSB of FHigh unused
             Sign  <= crc_v(14);
             Cout  <= '0';
             OV    <= '0';

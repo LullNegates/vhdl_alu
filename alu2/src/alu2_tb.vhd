@@ -39,6 +39,11 @@ architecture sim of ASALU_structural_tb is
   signal Ready : std_logic;
   signal CAN   : std_logic;
 
+  -- Phase 0: can_reg_20a(18..0) all-zero (default, 2.0A mode) = 19 bits
+  -- Phase 1: mem[0x00]=0xFF + mem[0x01]=0xAA, each MSB first = 16 bits
+  constant CAN_EXPECTED : std_logic_vector(34 downto 0) :=
+    "0000000000000000000" & "11111111" & "10101010";
+
 begin
 
   dut : ASALU port map (
@@ -227,13 +232,16 @@ begin
     assert Flow = x"95" and FHigh = x"00" and CB = '0'
       report "FAIL 1101 CRC result (expected 0x0095 for 0xFF)" severity failure;
 
-    -- ---- 1110: SendCANData ----
-    -- Sends: can_reg_20a (19-bit, all-zero) + mem[0x00..0x01] (2 bytes)
-    -- Total: 19 + 16 = 35 clock cycles
+    -- ---- 1110: SendCANData (bit-by-bit) ----
+    -- 35 bits: 19 header (all-zero, 2.0A) + 0xFF + 0xAA, verified per clock
     A <= x"00"; B <= x"01"; Cmd <= "1110";
     wait until rising_edge(CLK); wait for 1 ns;
     assert Ready = '0' report "FAIL 1110 SendCAN not started" severity failure;
-    wait until Ready = '1'; wait for 1 ns;
+    for i in 34 downto 0 loop
+      wait until rising_edge(CLK); wait for 1 ns;
+      assert CAN = CAN_EXPECTED(i)
+        report "FAIL 1110 CAN bit " & integer'image(34 - i) severity failure;
+    end loop;
     assert Ready = '1' report "FAIL 1110 SendCAN not done" severity failure;
 
     report "Simulation complete -- all assertions passed";
