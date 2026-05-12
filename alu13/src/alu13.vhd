@@ -31,6 +31,12 @@ architecture structural_v2 of ASALU is
   component bit_nand    port(A,B: in std_logic_vector(7 downto 0); f_low,f_high: out std_logic_vector(7 downto 0); c_out,equal,ov,sign: out std_logic); end component;
   component bit_xor     port(A,B: in std_logic_vector(7 downto 0); f_low,f_high: out std_logic_vector(7 downto 0); c_out,equal,ov,sign: out std_logic); end component;
 
+  -- BUFG: globaler Clock-Buffer für den invertierten Takt.
+  -- Ohne BUFG behandelt ISE CLK_N als kombinatorisches Signal vor dem BRAM-Clock-Pin,
+  -- was den Placer mit FATAL_ERROR (fast feedbacks, bad index) zum Absturz bringt.
+  -- Mit BUFG wird CLK_N über das dedizierte Clock-Netz geführt — ISE akzeptiert das.
+  component BUFG port(I : in std_logic; O : out std_logic); end component;
+
   -- RAMB4_S8_S8 dual-port block RAM (from alu3/RAM.vhd)
   component ram
     generic(ADDRESSWIDTH : positive := 9; DATAWIDTH : positive := 8);
@@ -61,8 +67,10 @@ architecture structural_v2 of ASALU is
          lls_sg, lrs_sg, llr_sg, lrr_sg,
          mul_sg, nand_sg, xor_sg             : std_logic;
 
-  -- Inverted clock for RAMB4 (writes/reads on falling CLK edge)
-  signal CLK_N : std_logic;
+  -- CLK_INV: einfacher Inverter-Ausgang (LUT), wird als BUFG-Eingang genutzt.
+  -- CLK_N:   global verteilter invertierter Takt (BUFG-Ausgang) für RAMB4 CLKA/CLKB.
+  signal CLK_INV : std_logic;
+  signal CLK_N   : std_logic;
 
   -- RAM port signals (Port A = write, Port B = read)
   signal ADDRA : std_logic_vector(8 downto 0);
@@ -99,8 +107,12 @@ architecture structural_v2 of ASALU is
 
 begin
 
-  Equal <= '1' when A = B else '0';
-  CLK_N <= not CLK;
+  Equal   <= '1' when A = B else '0';
+  CLK_INV <= not CLK;
+
+  -- BUFG verteilt CLK_INV über das globale Clock-Netz — verhindert Placer-Absturz
+  -- (FATAL_ERROR: Pl_Uap_Flow1FitterRuleFastFeedbacks) bei invertiertem BRAM-Takt.
+  u_bufg_n : BUFG port map(I => CLK_INV, O => CLK_N);
 
   -- Port A: write (WriteRAM). WEA driven combinatorially from Cmd.
   ADDRA <= '0' & B;
