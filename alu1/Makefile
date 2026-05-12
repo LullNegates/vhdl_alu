@@ -1,17 +1,16 @@
 GHDL    := ghdl
 STD     := --std=08
 SIMDIR  := sim
-TOP     := ASALU_tb
+TOP     := ASALU_behavioral_tb
 WAVE    := $(SIMDIR)/alu1.ghw
-
-SRCS := src/alu1.vhd \
-        src/alu1_tb.vhd
+SHARED  := ../shared/asalu_entity.vhd
 
 .PHONY: all compile simulate view clean
 
 all: simulate
 
-compile: $(SRCS)
+compile:
+	$(GHDL) -a $(STD) $(SHARED)
 	$(GHDL) -a $(STD) src/alu1.vhd
 	$(GHDL) -a $(STD) src/alu1_tb.vhd
 	$(GHDL) -e $(STD) $(TOP)
