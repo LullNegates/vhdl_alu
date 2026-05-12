@@ -244,8 +244,12 @@ begin
     A <= x"00"; B <= x"01"; Cmd <= "1110";
     wait until rising_edge(CLK); wait for 1 ns;
     assert Ready = '0' report "FAIL 1110 SendCAN not started" severity failure;
+    -- 500 Takte pro CAN-Bit (CAN_DIV+1 = 500, entspricht 1 Mbit/s @ 500 MHz laut ALU.ucf)
     for i in 34 downto 0 loop
-      wait until rising_edge(CLK); wait for 1 ns;
+      for d in 1 to 500 loop
+        wait until rising_edge(CLK);
+      end loop;
+      wait for 1 ns;
       assert CAN = CAN_EXPECTED(i)
         report "FAIL 1110 CAN bit " & integer'image(34 - i) severity failure;
     end loop;

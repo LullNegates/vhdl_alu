@@ -75,6 +75,10 @@ architecture structural_v2 of ASALU is
   type state_t is (IDLE, CRC_COMPUTE, CAN_SEND);
   signal state : state_t := IDLE;
 
+  -- CAN Baudratengenerator: CAN_DIV+1 Systemtakte pro CAN-Bit.
+  -- ALU.ucf: PERIOD "CLK" 2 ns -> 500 MHz. Für 1 Mbit/s: 1000 ns / 2 ns = 500 Takte -> CAN_DIV = 499.
+  constant CAN_DIV : integer := 499;
+
   -- CRC state (CAN CRC-15 / ISO 11898, poly 0x4599)
   signal crc_reg  : std_logic_vector(14 downto 0) := (others => '0');
   signal crc_addr : unsigned(7 downto 0);
@@ -89,7 +93,9 @@ architecture structural_v2 of ASALU is
   signal can_byte    : std_logic_vector(7 downto 0);
   signal can_bit     : integer range 0 to 7;
   signal can_phase   : std_logic;
-  signal can_reg_ptr : integer range 0 to 38;
+  signal can_reg_ptr  : integer range 0 to 38;
+  signal can_out      : std_logic := '0';
+  signal can_baud_cnt : integer range 0 to 499 := 0;
 
 begin
 
@@ -165,9 +171,11 @@ begin
         Ready       <= '1';
         CAN         <= '0';
         crc_reg     <= (others => '0');
-        can_reg_20a <= (others => '0');
-        can_reg_20b <= (others => '0');
-        can_mode    <= '0';
+        can_reg_20a  <= (others => '0');
+        can_reg_20b  <= (others => '0');
+        can_mode     <= '0';
+        can_out      <= '0';
+        can_baud_cnt <= 0;
       else
 
         CB    <= '0';
@@ -205,16 +213,19 @@ begin
                 state    <= CRC_COMPUTE;
               when "1110" =>  -- SendCANData(A,B): header reg + mem[A..B] on CAN pin
                 -- ADDRB = can_addr = A (Phase 0 default) -> pre-fetches mem[A] during header
-                can_addr    <= unsigned(A);
-                can_end_s   <= unsigned(B);
-                can_phase   <= '0';
+                can_addr     <= unsigned(A);
+                can_end_s    <= unsigned(B);
+                can_phase    <= '0';
+                can_baud_cnt <= 0;
                 if can_mode = '0' then
                   can_reg_ptr <= 18;
+                  can_out     <= can_reg_20a(18);
                 else
                   can_reg_ptr <= 38;
+                  can_out     <= can_reg_20b(38);
                 end if;
-                Ready       <= '0';
-                state       <= CAN_SEND;
+                Ready        <= '0';
+                state        <= CAN_SEND;
               when others =>
                 Flow<=(others=>'0'); FHigh<=(others=>'0');
                 Cout<='0'; OV<='0'; Sign<='0';
@@ -251,46 +262,48 @@ begin
             end if;
 
           -- ------------------------------------------------------------
-          -- CAN_SEND:
-          --   Phase 0: serialize header register MSB-first (19 or 39 bits).
-          --            ADDRB = can_addr -> RAMB4 pre-fetches mem[can_addr] throughout.
-          --            At last header bit: load can_byte from DOB (mem[can_addr]).
-          --   Phase 1: serialize can_byte bits MSB-first.
-          --            ADDRB = can_addr+1 -> RAMB4 pre-fetches next byte while current
-          --            byte is being serialized (8 cycles headroom, only 1 needed).
-          --            At bit 0: reload can_byte from DOB = mem[can_addr+1], no gap.
+          -- CAN_SEND: jedes Bit wird CAN_DIV+1 = 500 Takte gehalten (1 Mbit/s @ 500 MHz).
+          --   can_out hält das aktuelle Bit stabil; Automat schreitet nur beim Zählerablauf weiter.
+          --   Phase 0: Header MSB-first. Phase 1: Datenbytes MSB-first.
           when CAN_SEND =>
             Ready <= '0';
-            if can_phase = '0' then
-              -- Output header bit
-              if can_mode = '0' then
-                CAN <= can_reg_20a(can_reg_ptr);
-              else
-                CAN <= can_reg_20b(can_reg_ptr);
-              end if;
-              if can_reg_ptr = 0 then
-                -- Last header bit: DOB = mem[can_addr] is ready (pre-fetched)
-                can_phase <= '1';
-                can_byte  <= DOB;
-                can_bit   <= 7;
-              else
-                can_reg_ptr <= can_reg_ptr - 1;
-              end if;
+            CAN   <= can_out;
+            if can_baud_cnt < CAN_DIV then
+              can_baud_cnt <= can_baud_cnt + 1;
             else
-              -- Phase 1: serialize can_byte
-              CAN <= can_byte(can_bit);
-              if can_bit = 0 then
-                if can_addr = can_end_s then
-                  Ready <= '1';
-                  state <= IDLE;
+              can_baud_cnt <= 0;
+              if can_phase = '0' then
+                if can_reg_ptr = 0 then
+                  -- Letztes Header-Bit: DOB = mem[can_addr] ist bereit (vorausgelesen)
+                  can_phase <= '1';
+                  can_byte  <= DOB;
+                  can_bit   <= 7;
+                  can_out   <= DOB(7);
                 else
-                  -- DOB = mem[can_addr+1] has been pre-fetched for 8 cycles
-                  can_byte <= DOB;
-                  can_addr <= can_addr + 1;
-                  can_bit  <= 7;
+                  can_reg_ptr <= can_reg_ptr - 1;
+                  if can_mode = '0' then
+                    can_out <= can_reg_20a(can_reg_ptr - 1);
+                  else
+                    can_out <= can_reg_20b(can_reg_ptr - 1);
+                  end if;
                 end if;
               else
-                can_bit <= can_bit - 1;
+                if can_bit = 0 then
+                  if can_addr = can_end_s then
+                    Ready   <= '1';
+                    can_out <= '0';
+                    state   <= IDLE;
+                  else
+                    -- DOB = mem[can_addr+1] wurde während 500 Takten vorausgelesen
+                    can_byte <= DOB;
+                    can_addr <= can_addr + 1;
+                    can_bit  <= 7;
+                    can_out  <= DOB(7);
+                  end if;
+                else
+                  can_bit <= can_bit - 1;
+                  can_out <= can_byte(can_bit - 1);
+                end if;
               end if;
             end if;
 
