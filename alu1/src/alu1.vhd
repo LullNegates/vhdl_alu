@@ -45,6 +45,22 @@ begin
   begin
     if rising_edge(CLK) then
 
+      if RST = '1' then
+        state       <= IDLE;
+        Flow        <= (others => '0');
+        FHigh       <= (others => '0');
+        Cout        <= '0';
+        OV          <= '0';
+        Sign        <= '0';
+        CB          <= '0';
+        Ready       <= '1';
+        CAN         <= '0';
+        crc_reg     <= (others => '0');
+        can_reg_20a <= (others => '0');
+        can_reg_20b <= (others => '0');
+        can_mode    <= '0';
+      else
+
       -- Driven every cycle; overridden in multi-cycle states below
       CB    <= '0';
       Ready <= '1';
@@ -262,6 +278,7 @@ begin
           end if;
 
       end case;
+      end if;  -- RST
     end if;
   end process;
 

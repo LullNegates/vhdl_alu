@@ -5,6 +5,7 @@ use IEEE.NUMERIC_STD.ALL;
 entity ASALU is
   port (
     CLK   : in  std_logic;
+    RST   : in  std_logic;
     A     : in  std_logic_vector(7 downto 0);
     B     : in  std_logic_vector(7 downto 0);
     Cmd   : in  std_logic_vector(3 downto 0);

@@ -209,6 +209,7 @@ use IEEE.NUMERIC_STD.ALL;
 entity mem_ctrl is
   port (
     CLK       : in  std_logic;
+    RST       : in  std_logic;
     A         : in  std_logic_vector(7 downto 0);
     B         : in  std_logic_vector(7 downto 0);
     Cmd       : in  std_logic_vector(3 downto 0);
@@ -220,7 +221,8 @@ entity mem_ctrl is
     mc_cb     : out std_logic;
     mc_ready  : out std_logic;
     mc_can    : out std_logic;
-    mc_active : out std_logic
+    mc_active : out std_logic;
+    mc_stall  : out std_logic  -- '1' only while state machine runs (CRC/CAN), not for WriteRAM
   );
 end entity mem_ctrl;
 
@@ -254,6 +256,9 @@ begin
   mc_active <= '1' when (state /= IDLE) or
                         (Cmd = "1100" or Cmd = "1101" or Cmd = "1110")
                else '0';
+  -- Stall freezes the pipeline only during multi-cycle state machine execution.
+  -- WriteRAM (1100) is single-cycle and does not stall the pipeline.
+  mc_stall  <= '1' when state /= IDLE else '0';
 
   process(CLK)
     variable crc_v     : std_logic_vector(14 downto 0);
@@ -261,6 +266,22 @@ begin
     variable crc_bit_v : std_logic;
   begin
     if rising_edge(CLK) then
+      if RST = '1' then
+        state       <= IDLE;
+        mc_cb       <= '0';
+        mc_ready    <= '1';
+        mc_can      <= '0';
+        mc_cout     <= '0';
+        mc_ov       <= '0';
+        mc_sign     <= '0';
+        mc_flow     <= (others => '0');
+        mc_fhigh    <= (others => '0');
+        crc_reg     <= (others => '0');
+        can_reg_20a <= (others => '0');
+        can_reg_20b <= (others => '0');
+        can_mode    <= '0';
+      else
+
       mc_cb    <= '0';
       mc_ready <= '1';
       mc_can   <= '0';
@@ -360,6 +381,7 @@ begin
           end if;
 
       end case;
+      end if;  -- RST
     end if;
   end process;
 
@@ -368,9 +390,19 @@ end architecture rtl;
 
 -- ============================================================
 -- ASALU — architecture structural (ALU 2, G5: Maximale Nebenlaeufikeit)
--- All single-cycle ops computed simultaneously as sub-entity instances.
--- mem_ctrl handles multi-cycle ops (WriteRAM, CRC_MEM, SendCANData).
--- Output routing: mc_active selects mem_ctrl outputs over combinational.
+--
+-- 3-stage pipeline:
+--   Stage 1 (ID):  Input register — latches A, B, Cmd on rising edge.
+--   Stage 2 (EX):  All functional units compute in parallel (combinational).
+--                  arith_unit, mul_unit, shift_unit, logic_unit, result_mux,
+--                  flag_gen all driven from Stage 1 register simultaneously.
+--   Stage 3 (WB):  Output register — latches EX results on rising edge.
+--
+-- Stall: mc_stall='1' freezes both pipeline registers during CRC/CAN
+--        multi-cycle operations. WriteRAM (1100) does NOT stall the pipeline.
+--
+-- Output routing: mc_active gates between pipeline WB outputs and mem_ctrl.
+-- Equal: purely combinational from top-level inputs (spec: clock-independent).
 -- ============================================================
 
 architecture structural of ASALU is
@@ -432,16 +464,21 @@ architecture structural of ASALU is
 
   component mem_ctrl is
     port (
-      CLK : in std_logic; A : in std_logic_vector(7 downto 0); B : in std_logic_vector(7 downto 0);
+      CLK : in std_logic; RST : in std_logic; A : in std_logic_vector(7 downto 0); B : in std_logic_vector(7 downto 0);
       Cmd : in std_logic_vector(3 downto 0);
       mc_flow : out std_logic_vector(7 downto 0); mc_fhigh : out std_logic_vector(7 downto 0);
       mc_cout : out std_logic; mc_ov : out std_logic; mc_sign : out std_logic;
       mc_cb : out std_logic; mc_ready : out std_logic; mc_can : out std_logic;
-      mc_active : out std_logic
+      mc_active : out std_logic; mc_stall : out std_logic
     );
   end component;
 
-  -- Signals from combinational sub-units
+  -- Stage 1 pipeline register (ID): latches top-level inputs
+  signal p1_A   : std_logic_vector(7 downto 0) := (others => '0');
+  signal p1_B   : std_logic_vector(7 downto 0) := (others => '0');
+  signal p1_Cmd : std_logic_vector(3 downto 0) := (others => '0');
+
+  -- Stage 2 combinational results (EX): driven by sub-units from p1_*
   signal s_sum9     : std_logic_vector(8 downto 0);
   signal s_diff9    : std_logic_vector(8 downto 0);
   signal s_res_mul2 : std_logic_vector(7 downto 0);
@@ -460,59 +497,110 @@ architecture structural of ASALU is
   signal s_ov       : std_logic;
   signal s_sign     : std_logic;
 
+  -- Stage 3 pipeline register (WB): latches EX results
+  signal p2_flow  : std_logic_vector(7 downto 0) := (others => '0');
+  signal p2_fhigh : std_logic_vector(7 downto 0) := (others => '0');
+  signal p2_cout  : std_logic := '0';
+  signal p2_ov    : std_logic := '0';
+  signal p2_sign  : std_logic := '0';
+
   -- Signals from mem_ctrl
-  signal mc_flow    : std_logic_vector(7 downto 0);
-  signal mc_fhigh   : std_logic_vector(7 downto 0);
-  signal mc_cout    : std_logic;
-  signal mc_ov      : std_logic;
-  signal mc_sign    : std_logic;
-  signal mc_cb      : std_logic;
-  signal mc_ready   : std_logic;
-  signal mc_can     : std_logic;
-  signal mc_active  : std_logic;
+  signal mc_flow   : std_logic_vector(7 downto 0);
+  signal mc_fhigh  : std_logic_vector(7 downto 0);
+  signal mc_cout   : std_logic;
+  signal mc_ov     : std_logic;
+  signal mc_sign   : std_logic;
+  signal mc_cb     : std_logic;
+  signal mc_ready  : std_logic;
+  signal mc_can    : std_logic;
+  signal mc_active : std_logic;
+  signal mc_stall  : std_logic;
+
+  signal stall : std_logic;
 
 begin
 
-  -- Equal: purely combinational, independent of CLK
+  -- Stall freezes both pipeline registers during CRC/CAN multi-cycle execution.
+  -- WriteRAM does not stall: it completes in one cycle without blocking the pipeline.
+  stall <= mc_stall;
+
+  -- Equal: purely combinational from top-level ports, independent of pipeline and CLK.
   Equal <= '1' when A = B else '0';
 
-  -- CB, Ready, CAN always from mem_ctrl (defaults to 0/1/0 for non-memory ops)
+  -- CB, Ready, CAN are status/serial signals from mem_ctrl — not pipelined.
   CB    <= mc_cb;
   Ready <= mc_ready;
   CAN   <= mc_can;
 
-  -- mem_ctrl takes priority when active (Cmd 1100-1110 or state machine running)
-  Flow  <= mc_flow  when mc_active = '1' else s_flow;
-  FHigh <= mc_fhigh when mc_active = '1' else s_fhigh;
-  Cout  <= mc_cout  when mc_active = '1' else s_cout;
-  OV    <= mc_ov    when mc_active = '1' else s_ov;
-  Sign  <= mc_sign  when mc_active = '1' else s_sign;
+  -- Output routing: mem_ctrl takes priority when it is driving (WriteRAM, CRC, CAN active).
+  -- Otherwise outputs come from the WB pipeline register (Stage 3).
+  Flow  <= mc_flow  when mc_active = '1' else p2_flow;
+  FHigh <= mc_fhigh when mc_active = '1' else p2_fhigh;
+  Cout  <= mc_cout  when mc_active = '1' else p2_cout;
+  OV    <= mc_ov    when mc_active = '1' else p2_ov;
+  Sign  <= mc_sign  when mc_active = '1' else p2_sign;
 
-  -- Sub-units below are intentionally clockless: purely combinational, all results
-  -- available within the same cycle. result_mux selects the active output by Cmd.
+  -- Stage 1 register (ID): latch A, B, Cmd unless pipeline is stalled.
+  p1_reg : process(CLK)
+  begin
+    if rising_edge(CLK) then
+      if RST = '1' then
+        p1_A   <= (others => '0');
+        p1_B   <= (others => '0');
+        p1_Cmd <= (others => '0');
+      elsif stall = '0' then
+        p1_A   <= A;
+        p1_B   <= B;
+        p1_Cmd <= Cmd;
+      end if;
+    end if;
+  end process p1_reg;
+
+  -- Stage 3 register (WB): latch EX combinational results unless pipeline is stalled.
+  p2_reg : process(CLK)
+  begin
+    if rising_edge(CLK) then
+      if RST = '1' then
+        p2_flow  <= (others => '0');
+        p2_fhigh <= (others => '0');
+        p2_cout  <= '0';
+        p2_ov    <= '0';
+        p2_sign  <= '0';
+      elsif stall = '0' then
+        p2_flow  <= s_flow;
+        p2_fhigh <= s_fhigh;
+        p2_cout  <= s_cout;
+        p2_ov    <= s_ov;
+        p2_sign  <= s_sign;
+      end if;
+    end if;
+  end process p2_reg;
+
+  -- Stage 2 (EX): all functional units compute in parallel from Stage 1 register.
+  -- Every unit is active every cycle; result_mux selects the relevant result by Cmd.
   u_arith : arith_unit port map (
-    A => A, B => B,
+    A => p1_A, B => p1_B,
     sum9 => s_sum9, diff9 => s_diff9,
     res_mul2 => s_res_mul2, res_mul4 => s_res_mul4, res_neg => s_res_neg
   );
 
   u_mul : mul_unit port map (
-    A => A, B => B, product => s_product
+    A => p1_A, B => p1_B, product => s_product
   );
 
   u_shift : shift_unit port map (
-    A => A,
+    A => p1_A,
     res_sll => s_res_sll, res_slr => s_res_slr,
     res_rll => s_res_rll, res_rlr => s_res_rlr
   );
 
   u_logic : logic_unit port map (
-    A => A, B => B,
+    A => p1_A, B => p1_B,
     res_nand => s_res_nand, res_xor => s_res_xor
   );
 
   u_mux : result_mux port map (
-    Cmd => Cmd,
+    Cmd => p1_Cmd,
     sum9 => s_sum9, diff9 => s_diff9,
     res_mul2 => s_res_mul2, res_mul4 => s_res_mul4, res_neg => s_res_neg,
     product => s_product,
@@ -523,19 +611,24 @@ begin
   );
 
   u_flags : flag_gen port map (
-    Cmd => Cmd, A => A, B => B,
+    Cmd => p1_Cmd, A => p1_A, B => p1_B,
     sum9 => s_sum9, diff9 => s_diff9,
     res_neg => s_res_neg, product => s_product,
     flow_out => s_flow,
     cout_out => s_cout, ov_out => s_ov, sign_out => s_sign
   );
 
+  -- mem_ctrl is fed directly from the top-level ports, not through the pipeline.
+  -- This avoids re-execution: when a multi-cycle op completes and stall releases,
+  -- the port Cmd has already changed to the next instruction, so mem_ctrl sees
+  -- the new command immediately — exactly as in the behavioral architecture.
+  -- Single-cycle ops still flow through p1 → EX → p2 (2-cycle latency).
   u_mem : mem_ctrl port map (
-    CLK => CLK, A => A, B => B, Cmd => Cmd,
+    CLK => CLK, RST => RST, A => A, B => B, Cmd => Cmd,
     mc_flow => mc_flow, mc_fhigh => mc_fhigh,
     mc_cout => mc_cout, mc_ov => mc_ov, mc_sign => mc_sign,
     mc_cb => mc_cb, mc_ready => mc_ready,
-    mc_can => mc_can, mc_active => mc_active
+    mc_can => mc_can, mc_active => mc_active, mc_stall => mc_stall
   );
 
 end architecture structural;
