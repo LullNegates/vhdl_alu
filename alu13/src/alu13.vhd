@@ -5,8 +5,10 @@ use IEEE.NUMERIC_STD.ALL;
 -- Architecture structural_v2: ALU3 arithmetic sub-entities + ALU1 CRC/CAN logic.
 -- RAM: RAMB4_S8_S8 Xilinx Block RAM via ram component (ALU3/RAM.vhd).
 --      Simulation: ISim only (UNISIM primitive, GHDL not supported).
---      CLKA/CLKB = not CLK -> writes/reads latch on falling CLK edge,
---      data valid on next rising CLK edge (1-cycle read latency, pipelined away).
+--      CLKA = CLK  (Port A, Write): latcht Adresse/Daten auf steigender Flanke —
+--        gleiche Flanke wie Testbench-Inputs -> kein Off-by-half-cycle Fehler.
+--      CLKB = CLK_N (Port B, Read): latcht Adresse auf fallender Flanke,
+--        DOB gültig bis zur nächsten steigenden Flanke (1-Takt-Latenz pipelined).
 -- CRC: CAN CRC-15 / ISO 11898, polynomial 0x4599, 1 byte/cycle (variable for-loop).
 -- CAN: two-phase serializer (header register MSB-first, then mem[A..B]).
 --      ADDRB pre-fetches next byte during current byte serialization -> no inter-byte gap.
@@ -132,10 +134,13 @@ begin
   u_ram : ram
     generic map(ADDRESSWIDTH => 9, DATAWIDTH => 8)
     port map(
-      -- CLKA/CLKB = invertierter Systemtakt: RAMB4 latcht Adresse auf fallender Flanke,
-      -- Daten sind eine halbe Periode später (= nächste steigende Flanke) gültig.
-      -- Das versteckt die 1-Takt Leseverzögerung innerhalb einer Taktperiode.
-      CLKA  => CLK_N,   CLKB  => CLK_N,
+      -- CLKA = CLK: Write auf steigender Flanke — Testbench setzt Inputs VOR der
+      -- steigenden Flanke, BRAM latcht sie genau dann. CLKA=CLK_N wäre ein
+      -- Off-by-half-cycle Bug: Inputs ändern sich 1 ns nach der Flanke, CLK fällt
+      -- erst 5 ns später -> falscher Write-Zeitpunkt.
+      -- CLKB = CLK_N: Read-Adresse auf fallender Flanke latchen, DOB bis zur
+      -- nächsten steigenden Flanke gültig (1-Takt-Latenz pipelined).
+      CLKA  => CLK,     CLKB  => CLK_N,
       DIA   => DIA,
       -- DIB: Port B wird nur lesend genutzt. x"00" statt (others=>'0') weil XST
       -- in Port Maps keine uneingeschränkte Aggregat-Syntax unterstützt
@@ -211,7 +216,7 @@ begin
               when "1001" => Flow<=mul_res_l;   FHigh<=mul_res_h;   Cout<=mul_co;   OV<=mul_ov_s;  Sign<=mul_sg;
               when "1010" => Flow<=nand_res_l;  FHigh<=nand_res_h;  Cout<=nand_co;  OV<=nand_ov_s; Sign<=nand_sg;
               when "1011" => Flow<=xor_res_l;   FHigh<=xor_res_h;   Cout<=xor_co;   OV<=xor_ov_s;  Sign<=xor_sg;
-              when "1100" =>  -- WriteRAM: write handled by RAMB4 Port A on falling CLK
+              when "1100" =>  -- WriteRAM: write handled by RAMB4 Port A on rising CLK
                 Flow <= A; FHigh <= (others => '0');
                 Cout <= '0'; OV <= '0'; Sign <= '0';
               when "1101" =>  -- CRC_MEM(A,B): CAN CRC-15 over mem[A..B]
