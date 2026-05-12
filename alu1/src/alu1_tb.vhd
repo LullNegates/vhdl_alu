@@ -10,6 +10,7 @@ architecture sim of ASALU_behavioral_tb is
   component ASALU is
     port (
       CLK   : in  std_logic;
+      RST   : in  std_logic;
       A     : in  std_logic_vector(7 downto 0);
       B     : in  std_logic_vector(7 downto 0);
       Cmd   : in  std_logic_vector(3 downto 0);
@@ -26,6 +27,7 @@ architecture sim of ASALU_behavioral_tb is
   end component;
 
   signal CLK   : std_logic := '0';
+  signal RST   : std_logic := '0';
   signal A     : std_logic_vector(7 downto 0) := (others => '0');
   signal B     : std_logic_vector(7 downto 0) := (others => '0');
   signal Cmd   : std_logic_vector(3 downto 0) := (others => '0');
@@ -49,6 +51,7 @@ begin
   dut : ASALU
     port map (
       CLK   => CLK,
+      RST   => RST,
       A     => A,
       B     => B,
       Cmd   => Cmd,
@@ -71,8 +74,12 @@ begin
 
   stim : process
   begin
-    -- Sync to clock
+    -- Reset for 2 cycles, then release
+    RST <= '1';
     wait until rising_edge(CLK);
+    wait until rising_edge(CLK);
+    RST <= '0';
+    wait until rising_edge(CLK);  -- sync
 
     -- ---- 0000: F = A + B ----
     A <= x"0F"; B <= x"01"; Cmd <= "0000";
