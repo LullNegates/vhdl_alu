@@ -114,13 +114,23 @@ begin
   u_ram : ram
     generic map(ADDRESSWIDTH => 9, DATAWIDTH => 8)
     port map(
+      -- CLKA/CLKB = invertierter Systemtakt: RAMB4 latcht Adresse auf fallender Flanke,
+      -- Daten sind eine halbe Periode später (= nächste steigende Flanke) gültig.
+      -- Das versteckt die 1-Takt Leseverzögerung innerhalb einer Taktperiode.
       CLKA  => CLK_N,   CLKB  => CLK_N,
-      DIA   => DIA,     DIB   => (others => '0'),
+      DIA   => DIA,
+      -- DIB: Port B wird nur lesend genutzt. x"00" statt (others=>'0') weil XST
+      -- in Port Maps keine uneingeschränkte Aggregat-Syntax unterstützt
+      -- (XST:779 'Others' is in unconstrained array aggregate).
+      DIB   => x"00",
+      -- DOA: Port A Leseausgang wird nicht benötigt (nur Schreiben über Port A).
       DOA   => open,    DOB   => DOB,
       ADDRA => ADDRA,   ADDRB => ADDRB,
       ENA   => '1',     ENB   => '1',
       RSTA  => RST,     RSTB  => RST,
-      WEA   => WEA,     WEB   => '0'
+      WEA   => WEA,
+      -- WEB: Port B ist read-only, Schreibfreigabe dauerhaft deaktiviert.
+      WEB   => '0'
     );
 
   -- ALU3 sub-entity instantiations (equal output unused — driven combinatorially above)
