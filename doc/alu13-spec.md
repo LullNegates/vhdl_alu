@@ -13,19 +13,24 @@
 ---
 
 ## Geschwindigkeit durch Parallelisierung
+### Parallelisierungsansätze
+Es wurde eine Pipeline mit zwei Stages umgesetzt:
+1. Berechnung von F und Flags
+2. Selektierung von F und Flag-satz durch MUX
 
-### Parallelisierungsansatz
+Durch weitere Stages ist kein Performance-Gewinn möglich.
+Lediglich Logisch-Arithmetische Befehle werden in der Pipeline parallel ausgeführt, WRITE_RAM läuft komplett unabhängig durch kombinatorische Berechnung von Addresse und Enable-Signalen, CRC_MEM und SEND_CAN stoppen die Pipeline.
 
-Es wurde eine 2-stufige Pipeline umgesetzt:
+Während dies bei CRC_MEM nötig ist, da dieser Befehl das F-Register nach einer variablen (erst zur Laufzeit bestimmbaren) Anzahl Takte belegt, nutzt SEND_CAN nach maximal 8 Takten RAM-Zugriff keine weiteren geteilten Ressourcen der ALU, somit könnten weitere Befehle bearbeitet werden, dies konnte jedoch aus Zeitgründen nicht umgesetzt werden. Ferner könnte die RAM-Zugriffszeit wiederrum durch Verwendung der Dual-Port-Funktionalität des RAMs: somit könnten gleichzeitig zwei Byte ausgelesen werden, und die maimale Zeit, die SEND_CAN (bei 8 Data-Bytes) den RAM blockiert auf 4 Takte reduziert werden.
 
-1. **Stage 1 (p1\_pipe):** Alle 12 Sub-Entities berechnen kombinatorisch und parallel die Ergebnisse für alle logisch-arithmetischen Befehle. Am Ende jedes Taktes werden sämtliche Ausgaben der Sub-Entities sowie der aktuelle Befehlscode (`Cmd`) in Pipeline-Register (`p1_*`) eingefroren.
-2. **Stage 2 (IDLE-Mux):** Der im Vortakt eingefrorene Befehlscode (`p1_cmd`) wählt das zugehörige Ergebnis aus den `p1_*`-Registern aus und schreibt es in die Ausgangsregister `Flow`, `FHigh` und die Flags.
-
-Die eigentliche Berechnung findet also kombinatorisch **vor** Stage 1 statt. Stage 1 latcht, Stage 2 selektiert. Die Arithmetik-Latenz beträgt damit 2 Takte, der Durchsatz ist 1 Ergebnis pro Takt nach dem Pipeline-Fill.
-
-Durch weitere Stages ist kein Performance-Gewinn möglich, da der kritische Pfad durch den Block-RAM und die CRC-XOR-Kette dominiert wird, nicht durch die Arithmetik-Kombinatorik.
-
-Logisch-arithmetische Befehle (Cmd 0x0–0xB) laufen durch die Pipeline. `WriteRAM` (1100) wird kombinatorisch über `WEA` gesteuert und umgeht die Pipeline vollständig. `CRC_MEM` (1101) und `SendCANData` (1110) reagieren direkt auf den unverzögerten `Cmd`-Eingang und blockieren den Ausgang für die Dauer ihrer Ausführung.
+Die Logisch-Arithmetische Kombinatorik (inklusive Ergebnis-MUX) könnte mit einer Frequenz von <2ns Taktperiode betrieben werden. Somit könnten langsamere Abläufe wie bspw. RAM-Zugriff oder eine Bytewise-Kombinatorik für Berechnung des CRCs also Multi-Cycle-Paths markiert werden:
+```
+INST "ram_1/RAMB4_S8_S8_inst" TNM = RAM;                   -- declare ram instance
+TIMESPEC TS_RAM_2_CYCLES = FROM "RAM" TO "FFS" TS_CLK * 2; -- all signals from RAM to any FlipFlop can take 2 cycles
+INST "crc_mem_1/*" TNM = crc_mem_combinatorials;
+TIMESPEC TS_CRC_MEM_4_CYCLES = FROM "crc_mem_combinatorials" TO "FFS" TS_CLK * 4 DATAPATHONLY;
+```
+Dies wurde implementiert, die Taktfrequenz konnte so von ca. 7ns auf `Minimum period:   2.481ns` reduziert werden. Allerdings werden Multi-Cycle-Paths nicht in der Simulation abgebildet, weswegen testen der Pipeline nicht inklusive RAM Zugriff getestet werden konnte, Multi-Cycle-Paths wurden daraufhin verworfen, weswegen längere kritische Pfade die Performance jetzt massiv verschlechtern. Folglich ist die Pipeline nicht mehr zweckmäßig, da in einer Taktperiode genug Zeit für Arithmetische Kombinatorik und Selektierung des Ergebnisses wären. Für mögliche zukünftige Verbesserungen wurde dennoch an der Pipeline festgehalten.
 
 ### Synthese-Ergebnisse
 
@@ -34,7 +39,14 @@ Logisch-arithmetische Befehle (Cmd 0x0–0xB) laufen durch die Pipeline. `WriteR
 | Balanced (default)  | 8.295 ns        | 120 MHz |
 | Timing Performance  | 7.446 ns        | 134 MHz |
 
-Ressourcenverbrauch: 5 % Slices, 1 BRAM, 1 MULT18x18 (xc3s500e-5-vq100).
+
+| Logic Utilization            | Used | Utilization |
+|------------------------------|------|-------------|
+| Number of Slice Flip Flops   | 278  | 2%          |
+| Number of Occupied Slices    | 326  | 7%          |
+| Total Number of 4 input LUTs | 508  | 5%          |
+| Number of bonded IOBs        | 45   | 68%         |
+| Number ofMULT18X18SIOs       | 1    | 20%         |
 
 ---
 
@@ -61,24 +73,24 @@ Ressourcenverbrauch: 5 % Slices, 1 BRAM, 1 MULT18x18 (xc3s500e-5-vq100).
 
 ## Befehlstabelle
 
-| Cmd  | Mnemonik     | Operation                       | Cout                              | OV         | Sign     | Equal |
-|------|--------------|---------------------------------|-----------------------------------|------------|----------|-------|
-| 0000 | ADD          | F = A + B                       | Carry                             | Signed OVF | MSB      | A = B |
-| 0001 | SUB          | F = A − B                       | Borrow                            | Signed OVF | MSB      | A = B |
-| 0010 | MUL2         | F = (A+B) × 2                   | A+B Carry or A+B[7]               | 0          | MSB      | A = B |
-| 0011 | MUL4         | F = (A+B) × 4                   | A+B Carry or A+B[7] or A+B[6]     | 0          | MSB      | A = B |
-| 0100 | NEG          | F = −A (Zweier-Komplement)      | F[7]                              | Signed OVF | MSB      | 0     |
-| 0101 | SLL          | F = A << 1                      | A[7]                              | 0          | 0        | 0     |
-| 0110 | SLR          | F = A >> 1                      | A[0]                              | 0          | 0        | 0     |
-| 0111 | RLL          | F = rotate_left(A)              | 0                                 | 0          | 0        | 0     |
-| 1000 | RLR          | F = rotate_right(A)             | 0                                 | 0          | MSB      | 0     |
-| 1001 | MUL          | F = A × B → 16-bit              | 0                                 | 0          | FHigh[7] | 0     |
-| 1010 | NAND         | F = NOT(A AND B)                | 0                                 | 0          | 0        | A = B |
-| 1011 | XOR          | F = A XOR B                     | 0                                 | 0          | MSB      | 0     |
-| 1100 | WriteRAM     | mem[B] ← A                      | 0                                 | 0          | 0        | 0     |
-| 1101 | CRC_MEM      | CRC-15 von mem[A..B] → Flow     | 0                                 | 0          | MSB      | 0     |
-| 1110 | SendCANData  | Reg + mem[A..B] seriell → CAN   | 0                                 | 0          | 0        | 0     |
-| 1111 | Reserved     | —                               | 0                                 | 0          | 0        | 0     |
+| Cmd  | Mnemonik     | Operation                       | Cout                              | OV         | Sign     | Equal | Comment                    |
+|------|--------------|---------------------------------|-----------------------------------|------------|----------|-------|----------------------------|
+| 0000 | ADD          | F = A + B                       | Carry                             | Signed OVF | MSB      | A = B | -                          |
+| 0001 | SUB          | F = A − B                       | Borrow                            | Signed OVF | MSB      | A = B | -                          |
+| 0010 | MUL2         | F = (A+B) × 2                   | A+B Carry or A+B[7]               | 0          | MSB      | A = B | -                          |
+| 0011 | MUL4         | F = (A+B) × 4                   | A+B Carry or A+B[7] or A+B[6]     | 0          | MSB      | A = B | -                          |
+| 0100 | NEG          | F = −A (Zweier-Komplement)      | F[7]                              | Signed OVF | MSB      | 0     | ov='0' bei NEG 0xF0 = 0xF0 |
+| 0101 | SLL          | F = A << 1                      | A[7]                              | 0          | 0        | 0     | -                          |
+| 0110 | SLR          | F = A >> 1                      | A[0]                              | 0          | 0        | 0     | -                          |
+| 0111 | RLL          | F = rotate_left(A)              | 0                                 | 0          | 0        | 0     | not through carry          |
+| 1000 | RLR          | F = rotate_right(A)             | 0                                 | 0          | MSB      | 0     | not through carry          |
+| 1001 | MUL          | F = A × B → 16-bit              | 0                                 | 0          | FHigh[7] | 0     | -                          |
+| 1010 | NAND         | F = NOT(A AND B)                | 0                                 | 0          | 0        | A = B | -                          |
+| 1011 | XOR          | F = A XOR B                     | 0                                 | 0          | MSB      | 0     | -                          |
+| 1100 | WriteRAM     | mem[B] ← A                      | 0                                 | 0          | 0        | 0     | -                          |
+| 1101 | CRC_MEM      | CRC-15 von mem[A..B] → Flow     | 0                                 | 0          | MSB      | 0     | Stalls Pipeline            |
+| 1110 | SendCANData  | Reg + mem[A..B] seriell → CAN   | 0                                 | 0          | 0        | 0     | Stalls Pipeline            |
+| 1111 | Reserved     | —                               | 0                                 | 0          | 0        | 0     | -                          |
 
 ---
 

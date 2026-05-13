@@ -32,6 +32,25 @@ TIMESPEC TS_CRC_MEM_4_CYCLES = FROM "crc_mem_combinatorials" TO "FFS" TS_CLK * 4
 ```
 Dies wurde implementiert, die Taktfrequenz konnte so von ca. 7ns auf `Minimum period:   2.481ns` reduziert werden. Allerdings werden Multi-Cycle-Paths nicht in der Simulation abgebildet, weswegen testen der Pipeline nicht inklusive RAM Zugriff getestet werden konnte, Multi-Cycle-Paths wurden daraufhin verworfen, weswegen längere kritische Pfade die Performance jetzt massiv verschlechtern. Folglich ist die Pipeline nicht mehr zweckmäßig, da in einer Taktperiode genug Zeit für Arithmetische Kombinatorik und Selektierung des Ergebnisses wären. Für mögliche zukünftige Verbesserungen wurde dennoch an der Pipeline festgehalten.
 
+### Taktperiode
+(Beispielwert, kann je nach Heuristik um 1.5ns abweichen)
+Design statistics:
+Minimum period:  6.640ns{1}   (Maximum frequency:  150.602MHz)
+Maximum path delay from/to any node:   6.640ns
+
+---
+
+## Ressourcen
+
+
+| Logic Utilization            | Used | Utilization |
+|------------------------------|------|-------------|
+| Number of Slice Flip Flops   | 278  | 2%          |
+| Number of Occupied Slices    | 326  | 7%          |
+| Total Number of 4 input LUTs | 508  | 5%          |
+| Number of bonded IOBs        | 45   | 68%         |
+| Number ofMULT18X18SIOs       | 1    | 20%         |
+
 ---
 
 ## Entity ASALU — Ports
