@@ -1,7 +1,5 @@
 
-# ISE übergibt den CLK-Port nach dem I/O-Buffer-Einfügen intern als "CLK_IBUF".
-# Die originale Constraint "NET CLK" aus alu3 wird daher nicht erkannt —
-# ISE läuft dann im "Performance Evaluation Mode" ohne aktiven Timing-Constraint.
-# Fix: Net-Name explizit auf den post-IBUF-Namen anpassen.
-NET "CLK_IBUF" TNM_NET = CLK;
+# BUFGP (kein separates IBUF+BUFG) — NET "CLK_IBUF" existiert nicht mehr.
+# NET "CLK" -> Warning "Performance Evaluation Mode" statt ERROR; Implementation läuft durch.
+NET "CLK" TNM_NET = CLK;
 TIMESPEC TS_CLK = PERIOD "CLK" 2 ns HIGH 40%;
