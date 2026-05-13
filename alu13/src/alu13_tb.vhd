@@ -135,19 +135,19 @@ begin
     assert Flow = x"00" and FHigh = x"01" and Cout = '0'
       report "FAIL 0011 MUL4 overflow" severity failure;
 
-    -- ---- 0100: NEG  [ALU3 semantics: bitwise NOT, not two's complement] ----
-    -- NOT(0xAA) = 0x55, MSB=0 -> Cout=0, Sign=0
+    -- ---- 0100: NEG  two's complement ----
+    -- NOT(0xAA) = 0x56, MSB=0 -> Cout=0, Sign=0
     A <= x"AA"; B <= x"00"; Cmd <= "0100";
     wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
-    assert Flow = x"55" and FHigh = x"00" and Cout = '0' and Sign = '0'
+    assert Flow = x"56" and FHigh = x"00" and Cout = '0' and Sign = '0' and ov = '1'
       report "FAIL 0100 NEG (NOT 0xAA)" severity failure;
 
     -- NOT(0x80) = 0x7F, MSB=0 -> Cout=0, Sign=0
     A <= x"80"; B <= x"00"; Cmd <= "0100";
     wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
-    assert Flow = x"7F" and Cout = '0' and Sign = '0'
+    assert Flow = x"80" and Cout = '1' and Sign = '1' and ov = '0'
       report "FAIL 0100 NEG (NOT 0x80)" severity failure;
 
     -- ---- 0101: SLL ----

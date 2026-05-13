@@ -1,33 +1,6 @@
-----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
--- Create Date:    14:03:35 05/09/2026 
--- Design Name: 
--- Module Name:    negate - Behavioral 
--- Project Name: 
--- Target Devices: 
--- Tool versions: 
--- Description: 
---
--- Dependencies: 
---
--- Revision: 
--- Revision 0.01 - File Created
--- Additional Comments: 
---
-----------------------------------------------------------------------------------
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx primitives in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
+use IEEE.NUMERIC_STD.ALL;
 
 entity negate is
 port(
@@ -41,13 +14,13 @@ port(
 end negate;
 
 architecture Behavioral of negate is
-	signal negated : std_logic_vector(7 downto 0);
+	signal sum : std_logic_vector(8 downto 0);
 begin
-	negated <= not A;
-	f_low <= negated;
+	sum <= std_logic_vector(unsigned(not ('0' & A)) + 1);
+	f_low <= sum(7 downto 0);
 	f_high <= (others => '0');
-	c_out <= negated(7);
-	sign <= negated(7);
+	c_out <= sum(7);
+	sign <= sum(7);
 	equal <= '0';
-	ov <= '0';
+	ov <= sum(7) xor not A(7) xor sum(8); -- since B is "00000001", x xor B(7) = x, we can skip the final xor
 end Behavioral;
