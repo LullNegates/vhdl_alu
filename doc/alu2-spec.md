@@ -28,7 +28,7 @@ Identisch mit ALU 1 (behavioral):
 | Equal   | out    | 1      | A = B (kombinatorisch, taktunabhängig)            |
 | OV      | out    | 1      | Signed Overflow (ADD / SUB)                       |
 | Sign    | out    | 1      | MSB des Ergebnisses                               |
-| CB      | out    | 1      | CRCBusy — '1' während CRC_MEM                    |
+| CB      | out    | 1      | CRCBusy — '1' während CRC_MEM                      |
 | Ready   | out    | 1      | '0' während CRC_MEM / SendCANData, sonst '1'     |
 | CAN     | out    | 1      | Serieller CAN-Datenausgang                        |
 
@@ -52,9 +52,9 @@ Identisch mit ALU 1:
 | 1001 | MUL          | F = A × B → 16-bit              | 0                 | 0          | FHigh[7] |
 | 1010 | NAND         | F = NOT(A AND B)                | 0                 | 0          | MSB      |
 | 1011 | XOR          | F = A XOR B                     | 0                 | 0          | MSB      |
-| 1100 | WriteRAM     | mem[B] ← A                     | 0                 | 0          | 0        |
+| 1100 | WriteRAM     | mem[B] ← A                      | 0                 | 0          | 0        |
 | 1101 | CRC_MEM      | CRC-15 von mem[A..B] → Flow     | 0                 | 0          | MSB      |
-| 1110 | SendCANData  | Reg + mem[A..B] seriell → CAN  | —                 | —          | —        |
+| 1110 | SendCANData  | Reg + mem[A..B] seriell → CAN   | —                 | —          | —        |
 | 1111 | Reserved     | —                               | 0                 | 0          | 0        |
 
 ---

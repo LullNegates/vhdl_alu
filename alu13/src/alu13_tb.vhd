@@ -69,57 +69,68 @@ begin
     wait until rising_edge(CLK);
 
     -- ---- 0000: ADD ----
+    -- Pipeline: 2-stage. Each arithmetic op needs 2 rising edges before result is valid.
     A <= x"0F"; B <= x"01"; Cmd <= "0000";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"10" and FHigh = x"00" and Cout = '0' and OV = '0' and Sign = '0'
       report "FAIL 0000 ADD normal" severity failure;
 
     A <= x"FF"; B <= x"01"; Cmd <= "0000";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"00" and Cout = '1' and OV = '0'
       report "FAIL 0000 ADD carry" severity failure;
 
     A <= x"7F"; B <= x"01"; Cmd <= "0000";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"80" and Cout = '0' and OV = '1' and Sign = '1'
       report "FAIL 0000 ADD signed OV" severity failure;
 
     -- ---- 0001: SUB ----
     A <= x"10"; B <= x"01"; Cmd <= "0001";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"0F" and FHigh = x"00" and Cout = '0' and OV = '0' and Sign = '0'
       report "FAIL 0001 SUB normal" severity failure;
 
     A <= x"00"; B <= x"01"; Cmd <= "0001";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"FF" and Cout = '1' and Sign = '1'
       report "FAIL 0001 SUB underflow" severity failure;
 
     A <= x"80"; B <= x"01"; Cmd <= "0001";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"7F" and OV = '1'
       report "FAIL 0001 SUB signed OV" severity failure;
 
     -- ---- 0010: MUL2 = (A+B)*2  [ALU3 semantics: 16-bit result in FHigh:Flow] ----
     A <= x"02"; B <= x"03"; Cmd <= "0010";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"0A" and FHigh = x"00" and Cout = '0'
       report "FAIL 0010 MUL2 normal" severity failure;
 
     -- (0x40+0x40)*2 = 0x100: overflow into FHigh
     A <= x"40"; B <= x"40"; Cmd <= "0010";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"00" and FHigh = x"01" and Cout = '0'
       report "FAIL 0010 MUL2 overflow" severity failure;
 
     -- ---- 0011: MUL4 = (A+B)*4  [ALU3 semantics: 16-bit result in FHigh:Flow] ----
     A <= x"02"; B <= x"02"; Cmd <= "0011";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"10" and FHigh = x"00" and Cout = '0'
       report "FAIL 0011 MUL4 normal" severity failure;
 
     -- (0x20+0x20)*4 = 0x100: overflow into FHigh
     A <= x"20"; B <= x"20"; Cmd <= "0011";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"00" and FHigh = x"01" and Cout = '0'
       report "FAIL 0011 MUL4 overflow" severity failure;
@@ -127,95 +138,111 @@ begin
     -- ---- 0100: NEG  [ALU3 semantics: bitwise NOT, not two's complement] ----
     -- NOT(0xAA) = 0x55, MSB=0 -> Cout=0, Sign=0
     A <= x"AA"; B <= x"00"; Cmd <= "0100";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"55" and FHigh = x"00" and Cout = '0' and Sign = '0'
       report "FAIL 0100 NEG (NOT 0xAA)" severity failure;
 
     -- NOT(0x80) = 0x7F, MSB=0 -> Cout=0, Sign=0
     A <= x"80"; B <= x"00"; Cmd <= "0100";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"7F" and Cout = '0' and Sign = '0'
       report "FAIL 0100 NEG (NOT 0x80)" severity failure;
 
     -- ---- 0101: SLL ----
     A <= x"01"; B <= x"00"; Cmd <= "0101";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"02" and Cout = '0'
       report "FAIL 0101 SLL normal" severity failure;
 
     A <= x"80"; B <= x"00"; Cmd <= "0101";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"00" and Cout = '1'
       report "FAIL 0101 SLL carry" severity failure;
 
     -- ---- 0110: SLR ----
     A <= x"80"; B <= x"00"; Cmd <= "0110";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"40" and Cout = '0' and Sign = '0'
       report "FAIL 0110 SLR normal" severity failure;
 
     A <= x"01"; B <= x"00"; Cmd <= "0110";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"00" and Cout = '1'
       report "FAIL 0110 SLR carry" severity failure;
 
     -- ---- 0111: RLL ----
     A <= x"80"; B <= x"00"; Cmd <= "0111";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"01" and FHigh = x"00"
       report "FAIL 0111 RLL wrap" severity failure;
 
     A <= x"01"; B <= x"00"; Cmd <= "0111";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"02"
       report "FAIL 0111 RLL normal" severity failure;
 
     -- ---- 1000: RLR ----
     A <= x"01"; B <= x"00"; Cmd <= "1000";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"80" and FHigh = x"00"
       report "FAIL 1000 RLR wrap" severity failure;
 
     A <= x"80"; B <= x"00"; Cmd <= "1000";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"40"
       report "FAIL 1000 RLR normal" severity failure;
 
     -- ---- 1001: MUL (16-bit) ----
     A <= x"03"; B <= x"05"; Cmd <= "1001";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"0F" and FHigh = x"00" and Sign = '0'
       report "FAIL 1001 MUL small" severity failure;
 
     -- ALU3 mul.vhd: sign <= '0' hardcoded (ALU1 drove sign from product MSB)
     A <= x"FF"; B <= x"FF"; Cmd <= "1001";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"01" and FHigh = x"FE"
       report "FAIL 1001 MUL large" severity failure;
 
     -- ---- 1010: NAND ----
     A <= x"FF"; B <= x"FF"; Cmd <= "1010";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"00" and FHigh = x"00"
       report "FAIL 1010 NAND all-ones" severity failure;
 
     A <= x"AA"; B <= x"55"; Cmd <= "1010";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"FF"
       report "FAIL 1010 NAND no-overlap" severity failure;
 
     -- ---- 1011: XOR ----
     A <= x"FF"; B <= x"0F"; Cmd <= "1011";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"F0" and FHigh = x"00"
       report "FAIL 1011 XOR" severity failure;
 
     A <= x"FF"; B <= x"FF"; Cmd <= "1011";
+    wait until rising_edge(CLK);
     wait until rising_edge(CLK); wait for 1 ns;
     assert Flow = x"00" and Sign = '0'
       report "FAIL 1011 XOR zero" severity failure;
 
-    -- ---- Equal flag (combinational — no clock edge needed) ----
+    -- ---- Equal flag (combinational -- no clock edge needed) ----
     A <= x"42"; B <= x"42"; Cmd <= "0000";
     wait for 1 ns;
     assert Equal = '1' report "FAIL Equal A=B" severity failure;
@@ -225,6 +252,7 @@ begin
     assert Equal = '0' report "FAIL Equal A/=B" severity failure;
 
     -- ---- 1100: WriteRAM + 1101: CRC_MEM ----
+    -- WriteRAM: WEA is combinatorial (no pipeline), write happens on rising CLK edge.
     A <= x"FF"; B <= x"00"; Cmd <= "1100";
     wait until rising_edge(CLK); wait for 1 ns;
 
@@ -232,6 +260,7 @@ begin
     wait until rising_edge(CLK); wait for 1 ns;
 
     -- CRC-15 of 0xFF = 0x0095
+    -- FSM transition: raw Cmd detected in IDLE, no pipeline delay.
     A <= x"00"; B <= x"00"; Cmd <= "1101";
     wait until rising_edge(CLK); wait for 1 ns;
     assert CB = '1' and Ready = '0'
@@ -241,6 +270,7 @@ begin
       report "FAIL 1101 CRC result (expected 0x0095 for 0xFF)" severity failure;
 
     -- ---- 1110: SendCANData ----
+    -- FSM transition: raw Cmd detected in IDLE, no pipeline delay.
     A <= x"00"; B <= x"01"; Cmd <= "1110";
     wait until rising_edge(CLK); wait for 1 ns;
     assert Ready = '0' report "FAIL 1110 SendCAN not started" severity failure;

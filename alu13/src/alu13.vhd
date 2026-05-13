@@ -10,6 +10,11 @@ use IEEE.NUMERIC_STD.ALL;
 --      ADDRB = '0'&A im IDLE-Takt (Cmd=1101) -> DOB = mem[A] im ersten CRC_COMPUTE-Takt.
 --      CLK_N / BUFG wurden entfernt: ISims UNISIM-Modell von RAMB4_S8_S8 simuliert
 --      anti-korrelierte Takte (CLK / NOT CLK) auf Port A/B nicht korrekt.
+-- Pipeline: 2-stage arithmetic (Cmd 0x0–0xB).
+--   Stage 1 (p1_pipe): sub-entity results + Cmd latched in p1_* registers each cycle.
+--   Stage 2 (IDLE mux): p1_cmd selects result → output registers (Flow, FHigh, flags).
+--   FSM ops (CRC_MEM, SendCAN, WriteRAM) bypass pipeline — use raw Cmd, latency unchanged.
+--   Arithmetic throughput: 1 result/cycle; latency: 2 cycles (testbench updated accordingly).
 -- CRC: CAN CRC-15 / ISO 11898, polynomial 0x4599, 1 byte/cycle (variable for-loop).
 -- CAN: two-phase serializer (header register MSB-first, then mem[A..B]).
 --      ADDRB pre-fetches next byte during current byte serialization -> no inter-byte gap.
@@ -99,6 +104,23 @@ architecture structural_v2 of ASALU is
   signal can_out      : std_logic := '0';
   signal can_baud_cnt : integer range 0 to 499 := 0;
 
+  -- Pipeline stage 1: registered sub-entity outputs (arithmetic datapath)
+  signal p1_cmd                                          : std_logic_vector(3 downto 0);
+  signal p1_add_l,  p1_sub_l,  p1_alls_l,  p1_allls_l,
+         p1_neg_l,  p1_lls_l,  p1_lrs_l,   p1_llr_l,
+         p1_lrr_l,  p1_mul_l,  p1_nand_l,  p1_xor_l    : std_logic_vector(7 downto 0);
+  signal p1_add_h,  p1_sub_h,  p1_alls_h,  p1_allls_h,
+         p1_neg_h,  p1_lls_h,  p1_lrs_h,   p1_llr_h,
+         p1_lrr_h,  p1_mul_h,  p1_nand_h,  p1_xor_h    : std_logic_vector(7 downto 0);
+  signal p1_add_co, p1_sub_co, p1_alls_co, p1_allls_co,
+         p1_neg_co, p1_lls_co, p1_lrs_co,  p1_llr_co,
+         p1_lrr_co, p1_mul_co, p1_nand_co, p1_xor_co    : std_logic;
+  signal p1_add_ov, p1_sub_ov, p1_neg_ov,
+         p1_mul_ov, p1_nand_ov, p1_xor_ov               : std_logic;
+  signal p1_add_sg, p1_sub_sg, p1_neg_sg,
+         p1_lls_sg, p1_lrs_sg, p1_llr_sg, p1_lrr_sg,
+         p1_mul_sg, p1_nand_sg, p1_xor_sg               : std_logic;
+
 begin
 
   Equal <= '1' when A = B else '0';
@@ -154,6 +176,40 @@ begin
   u_nand  : bit_nand    port map(A,B, nand_res_l,  nand_res_h,  nand_co,  open, nand_ov_s, nand_sg);
   u_xor   : bit_xor     port map(A,B, xor_res_l,   xor_res_h,   xor_co,   open, xor_ov_s,  xor_sg);
 
+  -- Pipeline stage 1: latch all sub-entity combinatorial outputs + Cmd each cycle
+  p1_pipe : process(CLK)
+  begin
+    if rising_edge(CLK) then
+      p1_cmd      <= Cmd;
+      p1_add_l    <= add_res_l;   p1_add_h    <= add_res_h;
+      p1_sub_l    <= sub_res_l;   p1_sub_h    <= sub_res_h;
+      p1_alls_l   <= alls_res_l;  p1_alls_h   <= alls_res_h;
+      p1_allls_l  <= allls_res_l; p1_allls_h  <= allls_res_h;
+      p1_neg_l    <= neg_res_l;   p1_neg_h    <= neg_res_h;
+      p1_lls_l    <= lls_res_l;   p1_lls_h    <= lls_res_h;
+      p1_lrs_l    <= lrs_res_l;   p1_lrs_h    <= lrs_res_h;
+      p1_llr_l    <= llr_res_l;   p1_llr_h    <= llr_res_h;
+      p1_lrr_l    <= lrr_res_l;   p1_lrr_h    <= lrr_res_h;
+      p1_mul_l    <= mul_res_l;   p1_mul_h    <= mul_res_h;
+      p1_nand_l   <= nand_res_l;  p1_nand_h   <= nand_res_h;
+      p1_xor_l    <= xor_res_l;   p1_xor_h    <= xor_res_h;
+      p1_add_co   <= add_co;      p1_sub_co   <= sub_co;
+      p1_alls_co  <= alls_co;     p1_allls_co <= allls_co;
+      p1_neg_co   <= neg_co;      p1_lls_co   <= lls_co;
+      p1_lrs_co   <= lrs_co;      p1_llr_co   <= llr_co;
+      p1_lrr_co   <= lrr_co;      p1_mul_co   <= mul_co;
+      p1_nand_co  <= nand_co;     p1_xor_co   <= xor_co;
+      p1_add_ov   <= add_ov_s;    p1_sub_ov   <= sub_ov_s;
+      p1_neg_ov   <= neg_ov_s;    p1_mul_ov   <= mul_ov_s;
+      p1_nand_ov  <= nand_ov_s;   p1_xor_ov   <= xor_ov_s;
+      p1_add_sg   <= add_sg;      p1_sub_sg   <= sub_sg;
+      p1_neg_sg   <= neg_sg;      p1_lls_sg   <= lls_sg;
+      p1_lrs_sg   <= lrs_sg;      p1_llr_sg   <= llr_sg;
+      p1_lrr_sg   <= lrr_sg;      p1_mul_sg   <= mul_sg;
+      p1_nand_sg  <= nand_sg;     p1_xor_sg   <= xor_sg;
+    end if;
+  end process p1_pipe;
+
   process(CLK)
     variable crc_v   : std_logic_vector(14 downto 0);
     variable crc_b   : std_logic_vector(7 downto 0);
@@ -187,25 +243,26 @@ begin
 
           -- ------------------------------------------------------------
           when IDLE =>
+            -- Stage 2: mux pipeline stage 1 result based on p1_cmd (Cmd delayed 1 cycle).
+            -- Arithmetic latency = 2 cycles. FSM ops (CRC/CAN/WriteRAM) use raw Cmd below.
+            case p1_cmd is
+              when "0000" => Flow<=p1_add_l;   FHigh<=p1_add_h;   Cout<=p1_add_co;   OV<=p1_add_ov;   Sign<=p1_add_sg;
+              when "0001" => Flow<=p1_sub_l;   FHigh<=p1_sub_h;   Cout<=p1_sub_co;   OV<=p1_sub_ov;   Sign<=p1_sub_sg;
+              when "0010" => Flow<=p1_alls_l;  FHigh<=p1_alls_h;  Cout<=p1_alls_co;  OV<='0';         Sign<='0';
+              when "0011" => Flow<=p1_allls_l; FHigh<=p1_allls_h; Cout<=p1_allls_co; OV<='0';         Sign<='0';
+              when "0100" => Flow<=p1_neg_l;   FHigh<=p1_neg_h;   Cout<=p1_neg_co;   OV<=p1_neg_ov;   Sign<=p1_neg_sg;
+              when "0101" => Flow<=p1_lls_l;   FHigh<=p1_lls_h;   Cout<=p1_lls_co;   OV<='0';         Sign<=p1_lls_sg;
+              when "0110" => Flow<=p1_lrs_l;   FHigh<=p1_lrs_h;   Cout<=p1_lrs_co;   OV<='0';         Sign<=p1_lrs_sg;
+              when "0111" => Flow<=p1_llr_l;   FHigh<=p1_llr_h;   Cout<=p1_llr_co;   OV<='0';         Sign<=p1_llr_sg;
+              when "1000" => Flow<=p1_lrr_l;   FHigh<=p1_lrr_h;   Cout<=p1_lrr_co;   OV<='0';         Sign<=p1_lrr_sg;
+              when "1001" => Flow<=p1_mul_l;   FHigh<=p1_mul_h;   Cout<=p1_mul_co;   OV<=p1_mul_ov;   Sign<=p1_mul_sg;
+              when "1010" => Flow<=p1_nand_l;  FHigh<=p1_nand_h;  Cout<=p1_nand_co;  OV<=p1_nand_ov;  Sign<=p1_nand_sg;
+              when "1011" => Flow<=p1_xor_l;   FHigh<=p1_xor_h;   Cout<=p1_xor_co;   OV<=p1_xor_ov;   Sign<=p1_xor_sg;
+              when others => null;
+            end case;
+            -- FSM control: react to current Cmd without pipeline delay
             case Cmd is
-              when "0000" => Flow<=add_res_l;   FHigh<=add_res_h;   Cout<=add_co;   OV<=add_ov_s;  Sign<=add_sg;
-              when "0001" => Flow<=sub_res_l;   FHigh<=sub_res_h;   Cout<=sub_co;   OV<=sub_ov_s;  Sign<=sub_sg;
-              when "0010" => Flow<=alls_res_l;  FHigh<=alls_res_h;  Cout<=alls_co;  OV<='0';       Sign<='0';
-              when "0011" => Flow<=allls_res_l; FHigh<=allls_res_h; Cout<=allls_co; OV<='0';       Sign<='0';
-              when "0100" => Flow<=neg_res_l;   FHigh<=neg_res_h;   Cout<=neg_co;   OV<=neg_ov_s;  Sign<=neg_sg;
-              when "0101" => Flow<=lls_res_l;   FHigh<=lls_res_h;   Cout<=lls_co;   OV<='0';       Sign<=lls_sg;
-              when "0110" => Flow<=lrs_res_l;   FHigh<=lrs_res_h;   Cout<=lrs_co;   OV<='0';       Sign<=lrs_sg;
-              when "0111" => Flow<=llr_res_l;   FHigh<=llr_res_h;   Cout<=llr_co;   OV<='0';       Sign<=llr_sg;
-              when "1000" => Flow<=lrr_res_l;   FHigh<=lrr_res_h;   Cout<=lrr_co;   OV<='0';       Sign<=lrr_sg;
-              when "1001" => Flow<=mul_res_l;   FHigh<=mul_res_h;   Cout<=mul_co;   OV<=mul_ov_s;  Sign<=mul_sg;
-              when "1010" => Flow<=nand_res_l;  FHigh<=nand_res_h;  Cout<=nand_co;  OV<=nand_ov_s; Sign<=nand_sg;
-              when "1011" => Flow<=xor_res_l;   FHigh<=xor_res_h;   Cout<=xor_co;   OV<=xor_ov_s;  Sign<=xor_sg;
-              when "1100" =>  -- WriteRAM: write handled by RAMB4 Port A on rising CLK
-                Flow <= A; FHigh <= (others => '0');
-                Cout <= '0'; OV <= '0'; Sign <= '0';
               when "1101" =>  -- CRC_MEM(A,B): CAN CRC-15 over mem[A..B]
-                -- ADDRB already = A in IDLE (default). On falling edge of this cycle
-                -- RAMB4 latches A -> DOB = mem[A] valid at next rising edge.
                 crc_reg  <= (others => '0');
                 crc_addr <= unsigned(A);
                 crc_end  <= unsigned(B);
@@ -213,7 +270,6 @@ begin
                 Ready    <= '0';
                 state    <= CRC_COMPUTE;
               when "1110" =>  -- SendCANData(A,B): header reg + mem[A..B] on CAN pin
-                -- ADDRB = can_addr = A (Phase 0 default) -> pre-fetches mem[A] during header
                 can_addr     <= unsigned(A);
                 can_end_s    <= unsigned(B);
                 can_phase    <= '0';
@@ -227,9 +283,7 @@ begin
                 end if;
                 Ready        <= '0';
                 state        <= CAN_SEND;
-              when others =>
-                Flow<=(others=>'0'); FHigh<=(others=>'0');
-                Cout<='0'; OV<='0'; Sign<='0';
+              when others => null;
             end case;
 
           -- ------------------------------------------------------------
