@@ -22,135 +22,69 @@ end ALU;
 
 
 architecture Behavioral of ALU is
-component add
+component combinatorics
 port(
+	CLK : in std_logic;
 	A, B : in std_logic_vector(7 downto 0);
-	f_low, f_high : out std_logic_vector(7 downto 0);
-	c_out : out std_logic;
-	equal : out std_logic;
-	ov : out std_logic;
-	sign : out std_logic
+	cmd_in : in std_logic_vector(3 downto 0); -- not used in this stage but we need to pass it to subsequent stages to select the result
+	cmd_out : out std_logic_vector(3 downto 0);
+
+	-- results out
+	add_res_l, sub_res_l, add_lls_res_l, add_lls_lls_res_l, neg_res_l, lls_res_l, lrs_res_l, llr_res_l, lrr_res_l, mul_res_l, nand_res_l, xor_res_l : out std_logic_vector(7 downto 0);	
+   add_res_h, sub_res_h, add_lls_res_h, add_lls_lls_res_h, neg_res_h, lls_res_h, lrs_res_h, llr_res_h, lrr_res_h, mul_res_h, nand_res_h, xor_res_h : out std_logic_vector(7 downto 0);
+
+	-- flags out
+	add_c_out, add_equal, add_ov, add_sign,
+	sub_c_out, sub_equal, sub_ov, sub_sign,
+	add_lls_c_out, add_lls_equal, add_lls_ov, add_lls_sign,
+	add_lls_lls_c_out, add_lls_lls_equal, add_lls_lls_ov, add_lls_lls_sign,
+	neg_c_out, neg_equal, neg_ov, neg_sign,
+	lls_c_out, lls_equal, lls_ov, lls_sign,
+	lrs_c_out, lrs_equal, lrs_ov, lrs_sign,
+	llr_c_out, llr_equal, llr_ov, llr_sign,
+	lrr_c_out, lrr_equal, lrr_ov, lrr_sign,
+	mul_c_out, mul_equal, mul_ov, mul_sign,
+	nand_c_out, nand_equal, nand_ov, nand_sign,
+	xor_c_out, xor_equal, xor_ov, xor_sign : out std_logic;
+
+	equal_flag : out std_logic
 );
 end component;
 
-component subtract
+component resultSelect
 port(
-	A, B : in std_logic_vector(7 downto 0);
-	f_low, f_high : out std_logic_vector(7 downto 0);
-	c_out : out std_logic;
-	equal : out std_logic;
-	ov : out std_logic;
-	sign : out std_logic
-);
-end component;
+	CLK : in std_logic;
 
-component add_lls
-port(
-	A, B : in std_logic_vector(7 downto 0);
-	f_low, f_high : out std_logic_vector(7 downto 0);
-	c_out : out std_logic;
-	equal : out std_logic;
-	ov : out std_logic;
-	sign : out std_logic
-);
-end component;
+	cmd_in : in std_logic_vector(3 downto 0);
 
-component add_lls_lls
-port(
-	A, B : in std_logic_vector(7 downto 0);
-	f_low, f_high : out std_logic_vector(7 downto 0);
-	c_out : out std_logic;
-	equal : out std_logic;
-	ov : out std_logic;
-	sign : out std_logic
-);
-end component;
+	-- results in
+	add_res_l, sub_res_l, add_lls_res_l, add_lls_lls_res_l, neg_res_l, lls_res_l, lrs_res_l, llr_res_l, lrr_res_l, mul_res_l, nand_res_l, xor_res_l : in std_logic_vector(7 downto 0);	
+   add_res_h, sub_res_h, add_lls_res_h, add_lls_lls_res_h, neg_res_h, lls_res_h, lrs_res_h, llr_res_h, lrr_res_h, mul_res_h, nand_res_h, xor_res_h : in std_logic_vector(7 downto 0);
 
-component negate
-port(
-	A, B : in std_logic_vector(7 downto 0);
-	f_low, f_high : out std_logic_vector(7 downto 0);
-	c_out : out std_logic;
-	equal : out std_logic;
-	ov : out std_logic;
-	sign : out std_logic
-);
-end component;
+	-- flags in
+	add_c_out, add_equal, add_ov, add_sign,
+	sub_c_out, sub_equal, sub_ov, sub_sign,
+	add_lls_c_out, add_lls_equal, add_lls_ov, add_lls_sign,
+	add_lls_lls_c_out, add_lls_lls_equal, add_lls_lls_ov, add_lls_lls_sign,
+	neg_c_out, neg_equal, neg_ov, neg_sign,
+	lls_c_out, lls_equal, lls_ov, lls_sign,
+	lrs_c_out, lrs_equal, lrs_ov, lrs_sign,
+	llr_c_out, llr_equal, llr_ov, llr_sign,
+	lrr_c_out, lrr_equal, lrr_ov, lrr_sign,
+	mul_c_out, mul_equal, mul_ov, mul_sign,
+	nand_c_out, nand_equal, nand_ov, nand_sign,
+	xor_c_out, xor_equal, xor_ov, xor_sign : in std_logic;
+	
+	crc_res : in std_logic_vector(15 downto 0);
+	
+	equal_flag : std_logic;
 
-component lls
-port(
-	A, B : in std_logic_vector(7 downto 0);
-	f_low, f_high : out std_logic_vector(7 downto 0);
-	c_out : out std_logic;
-	equal : out std_logic;
-	ov : out std_logic;
-	sign : out std_logic
-);
-end component;
-
-component lrs
-port(
-	A, B : in std_logic_vector(7 downto 0);
-	f_low, f_high : out std_logic_vector(7 downto 0);
-	c_out : out std_logic;
-	equal : out std_logic;
-	ov : out std_logic;
-	sign : out std_logic
-);
-end component;
-
-component llr
-port(
-	A, B : in std_logic_vector(7 downto 0);
-	f_low, f_high : out std_logic_vector(7 downto 0);
-	c_out : out std_logic;
-	equal : out std_logic;
-	ov : out std_logic;
-	sign : out std_logic
-);
-end component;
-
-component lrr
-port(
-	A, B : in std_logic_vector(7 downto 0);
-	f_low, f_high : out std_logic_vector(7 downto 0);
-	c_out : out std_logic;
-	equal : out std_logic;
-	ov : out std_logic;
-	sign : out std_logic
-);
-end component;
-
-component mul
-port(
-	A, B : in std_logic_vector(7 downto 0);
-	f_low, f_high : out std_logic_vector(7 downto 0);
-	c_out : out std_logic;
-	equal : out std_logic;
-	ov : out std_logic;
-	sign : out std_logic
-);
-end component;
-
-component bit_nand
-port(
-	A, B : in std_logic_vector(7 downto 0);
-	f_low, f_high : out std_logic_vector(7 downto 0);
-	c_out : out std_logic;
-	equal : out std_logic;
-	ov : out std_logic;
-	sign : out std_logic
-);
-end component;
-
-component bit_xor
-port(
-	A, B : in std_logic_vector(7 downto 0);
-	f_low, f_high : out std_logic_vector(7 downto 0);
-	c_out : out std_logic;
-	equal : out std_logic;
-	ov : out std_logic;
-	sign : out std_logic
+	-- selected result and flags
+	f_low_res, f_high_res : out std_logic_vector(7 downto 0);
+	c_out_res : out std_logic;
+	equal_res : out std_logic;
+	ov_res : out std_logic;
+	sign_res : out std_logic
 );
 end component;
 
@@ -172,17 +106,19 @@ end component;
 
 component crc_mem
 port(
-	byte_in : in std_logic_vector(1 downto 0);
-	crc_in :in std_logic_vector(15 downto 0);
-	crc_out : out std_logic_vector(15 downto 0)
+	CLK      : in  std_logic;
+	strobe   : in  std_logic;
+	data_in  : in  std_logic_vector(7 downto 0);
+	crc_out  : out std_logic_vector(15 downto 0);
+	ready    : out std_logic
 );
 end component;
 
--- arithmetic result signals
-signal add_res_l, sub_res_l, add_lls_res_l, add_lls_lls_res_l, neg_res_l, lls_res_l, lrs_res_l, llr_res_l, lrr_res_l, mul_res_l, nand_res_l, xor_res_l : std_logic_vector(7 downto 0);
+-- result signals
+signal add_res_l, sub_res_l, add_lls_res_l, add_lls_lls_res_l, neg_res_l, lls_res_l, lrs_res_l, llr_res_l, lrr_res_l, mul_res_l, nand_res_l, xor_res_l : std_logic_vector(7 downto 0);	
 signal add_res_h, sub_res_h, add_lls_res_h, add_lls_lls_res_h, neg_res_h, lls_res_h, lrs_res_h, llr_res_h, lrr_res_h, mul_res_h, nand_res_h, xor_res_h : std_logic_vector(7 downto 0);
 
--- arithmetic flag signals
+-- flag signals
 signal add_c_out, add_equal, add_ov, add_sign,
 sub_c_out, sub_equal, sub_ov, sub_sign,
 add_lls_c_out, add_lls_equal, add_lls_ov, add_lls_sign,
@@ -196,6 +132,8 @@ mul_c_out, mul_equal, mul_ov, mul_sign,
 nand_c_out, nand_equal, nand_ov, nand_sign,
 xor_c_out, xor_equal, xor_ov, xor_sign : std_logic;
 
+signal equal_flag : std_logic;
+
 -- ram signals
 signal WEA, WEB : std_logic;
 signal DOA, DOB : std_logic_vector(7 downto 0);
@@ -203,173 +141,241 @@ signal ENA, ENB : std_logic;
 signal ADDRA, ADDRB : std_logic_vector(8 downto 0);
 
 -- crc signals
-signal crc_busy : std_logic;
-signal crc_addr : std_logic_vector(7 downto 0);
-signal crc_addr_high : std_logic_vector(7 downto 0);
-signal crc_out : std_logic_vector(15 downto 0);
-signal crc_in : std_logic_vector(15 downto 0);
+signal crc_result : std_logic_vector(15 downto 0);
+signal crc_strobe : std_logic;
+signal crc_address_high : std_logic_vector(7 downto 0);
+signal crc_byte_processed: std_logic;
+
+-- crc fsm control
+type crc_state is (idle, ram_init, init, prefetch, fetch, wait_ready);
+signal current_crc_state, next_crc_state : crc_state;
 
 -- can signals
 signal can_B : std_logic;
 signal can_sending : std_logic;
 
+-- pipeline signals
+signal cmd_out : std_logic_vector(3 downto 0);
+signal xxx : std_logic_vector(3 downto 0);
+
 begin
 
-add_1 : add
+combinatorics_1 : combinatorics
 port map (
-	A => A,
-	B => B,
-	f_low => add_res_l,
-	f_high => add_res_h,
-	c_out => add_c_out,
-	equal => add_equal,
-	ov => add_ov,
-	sign => add_sign
+	CLK               => CLK,
+	A                 => A,
+	B                 => B,
+	cmd_in            => cmd,
+	cmd_out           => xxx,
+
+	-- results out
+	add_res_l         => add_res_l,
+	sub_res_l         => sub_res_l,
+	add_lls_res_l     => add_lls_res_l,
+	add_lls_lls_res_l => add_lls_lls_res_l,
+	neg_res_l         => neg_res_l,
+	lls_res_l         => lls_res_l,
+	lrs_res_l         => lrs_res_l,
+	llr_res_l         => llr_res_l,
+	lrr_res_l         => lrr_res_l,
+	mul_res_l         => mul_res_l,
+	nand_res_l        => nand_res_l,
+	xor_res_l         => xor_res_l,
+
+	add_res_h         => add_res_h,
+	sub_res_h         => sub_res_h,
+	add_lls_res_h     => add_lls_res_h,
+	add_lls_lls_res_h => add_lls_lls_res_h,
+	neg_res_h         => neg_res_h,
+	lls_res_h         => lls_res_h,
+	lrs_res_h         => lrs_res_h,
+	llr_res_h         => llr_res_h,
+	lrr_res_h         => lrr_res_h,
+	mul_res_h         => mul_res_h,
+	nand_res_h        => nand_res_h,
+	xor_res_h         => xor_res_h,
+
+	-- flags out
+	add_c_out         => add_c_out,
+	add_equal         => add_equal,
+	add_ov            => add_ov,
+	add_sign          => add_sign,
+
+	sub_c_out         => sub_c_out,
+	sub_equal         => sub_equal,
+	sub_ov            => sub_ov,
+	sub_sign          => sub_sign,
+
+	add_lls_c_out     => add_lls_c_out,
+	add_lls_equal     => add_lls_equal,
+	add_lls_ov        => add_lls_ov,
+	add_lls_sign      => add_lls_sign,
+
+	add_lls_lls_c_out => add_lls_lls_c_out,
+	add_lls_lls_equal => add_lls_lls_equal,
+	add_lls_lls_ov    => add_lls_lls_ov,
+	add_lls_lls_sign  => add_lls_lls_sign,
+
+	neg_c_out         => neg_c_out,
+	neg_equal         => neg_equal,
+	neg_ov            => neg_ov,
+	neg_sign          => neg_sign,
+
+	lls_c_out         => lls_c_out,
+	lls_equal         => lls_equal,
+	lls_ov            => lls_ov,
+	lls_sign          => lls_sign,
+
+	lrs_c_out         => lrs_c_out,
+	lrs_equal         => lrs_equal,
+	lrs_ov            => lrs_ov,
+	lrs_sign          => lrs_sign,
+
+	llr_c_out         => llr_c_out,
+	llr_equal         => llr_equal,
+	llr_ov            => llr_ov,
+	llr_sign          => llr_sign,
+
+	lrr_c_out         => lrr_c_out,
+	lrr_equal         => lrr_equal,
+	lrr_ov            => lrr_ov,
+	lrr_sign          => lrr_sign,
+
+	mul_c_out         => mul_c_out,
+	mul_equal         => mul_equal,
+	mul_ov            => mul_ov,
+	mul_sign          => mul_sign,
+
+	nand_c_out        => nand_c_out,
+	nand_equal        => nand_equal,
+	nand_ov           => nand_ov,
+	nand_sign         => nand_sign,
+
+	xor_c_out         => xor_c_out,
+	xor_equal         => xor_equal,
+	xor_ov            => xor_ov,
+	xor_sign          => xor_sign,
+	
+	equal_flag        => equal_flag
 );
 
-sub_1 : subtract
+resultSelect_1 : entity resultSelect
 port map (
-	A => A,
-	B => B,
-	f_low => sub_res_l,
-	f_high => sub_res_h,
-	c_out => sub_c_out,
-	equal => sub_equal,
-	ov => sub_ov,
-	sign => sub_sign
-);
+	CLK               => CLK,
+	cmd_in            => cmd_out,
 
-add_lls_1 : add_lls
-port map (
-	A => A,
-	B => B,
-	f_low => add_lls_res_l,
-	f_high => add_lls_res_h,
-	c_out => add_lls_c_out,
-	equal => add_lls_equal,
-	ov => add_lls_ov,
-	sign => add_lls_sign
-);
+	-- results in
+	add_res_l         => add_res_l,
+	sub_res_l         => sub_res_l,
+	add_lls_res_l     => add_lls_res_l,
+	add_lls_lls_res_l => add_lls_lls_res_l,
+	neg_res_l         => neg_res_l,
+	lls_res_l         => lls_res_l,
+	lrs_res_l         => lrs_res_l,
+	llr_res_l         => llr_res_l,
+	lrr_res_l         => lrr_res_l,
+	mul_res_l         => mul_res_l,
+	nand_res_l        => nand_res_l,
+	xor_res_l         => xor_res_l,
 
-add_lls_lls_1 : add_lls_lls
-port map (
-	A => A,
-	B => B,
-	f_low => add_lls_lls_res_l,
-	f_high => add_lls_lls_res_h,
-	c_out => add_lls_lls_c_out,
-	equal => add_lls_lls_equal,
-	ov => add_lls_lls_ov,
-	sign => add_lls_lls_sign
-);
+	add_res_h         => add_res_h,
+	sub_res_h         => sub_res_h,
+	add_lls_res_h     => add_lls_res_h,
+	add_lls_lls_res_h => add_lls_lls_res_h,
+	neg_res_h         => neg_res_h,
+	lls_res_h         => lls_res_h,
+	lrs_res_h         => lrs_res_h,
+	llr_res_h         => llr_res_h,
+	lrr_res_h         => lrr_res_h,
+	mul_res_h         => mul_res_h,
+	nand_res_h        => nand_res_h,
+	xor_res_h         => xor_res_h,
 
-neg_1 : negate
-port map (
-	A => A,
-	B => B,
-	f_low => neg_res_l,
-	f_high => neg_res_h,
-	c_out => neg_c_out,
-	equal => neg_equal,
-	ov => neg_ov,
-	sign => neg_sign
-);
+	-- flags in
+	add_c_out         => add_c_out,
+	add_equal         => add_equal,
+	add_ov            => add_ov,
+	add_sign          => add_sign,
 
-lls_1 : lls
-port map (
-	A => A,
-	B => B,
-	f_low => lls_res_l,
-	f_high => lls_res_h,
-	c_out => lls_c_out,
-	equal => lls_equal,
-	ov => lls_ov,
-	sign => lls_sign
-);
+	sub_c_out         => sub_c_out,
+	sub_equal         => sub_equal,
+	sub_ov            => sub_ov,
+	sub_sign          => sub_sign,
 
-lrs_1 : lrs
-port map (
-	A => A,
-	B => B,
-	f_low => lrs_res_l,
-	f_high => lrs_res_h,
-	c_out => lrs_c_out,
-	equal => lrs_equal,
-	ov => lrs_ov,
-	sign => lrs_sign
-);
+	add_lls_c_out     => add_lls_c_out,
+	add_lls_equal     => add_lls_equal,
+	add_lls_ov        => add_lls_ov,
+	add_lls_sign      => add_lls_sign,
 
-llr_1 : llr
-port map (
-	A => A,
-	B => B,
-	f_low => llr_res_l,
-	f_high => llr_res_h,
-	c_out => llr_c_out,
-	equal => llr_equal,
-	ov => llr_ov,
-	sign => llr_sign
-);
+	add_lls_lls_c_out => add_lls_lls_c_out,
+	add_lls_lls_equal => add_lls_lls_equal,
+	add_lls_lls_ov    => add_lls_lls_ov,
+	add_lls_lls_sign  => add_lls_lls_sign,
 
-lrr_1 : lrr
-port map (
-	A => A,
-	B => B,
-	f_low => lrr_res_l,
-	f_high => lrr_res_h,
-	c_out => lrr_c_out,
-	equal => lrr_equal,
-	ov => lrr_ov,
-	sign => lrr_sign
-);
+	neg_c_out         => neg_c_out,
+	neg_equal         => neg_equal,
+	neg_ov            => neg_ov,
+	neg_sign          => neg_sign,
 
-mul_1 : mul
-port map (
-	A => A,
-	B => B,
-	f_low => mul_res_l,
-	f_high => mul_res_h,
-	c_out => mul_c_out,
-	equal => mul_equal,
-	ov => mul_ov,
-	sign => mul_sign
-);
+	lls_c_out         => lls_c_out,
+	lls_equal         => lls_equal,
+	lls_ov            => lls_ov,
+	lls_sign          => lls_sign,
 
-nand_1 : bit_nand
-port map (
-	A => A,
-	B => B,
-	f_low => nand_res_l,
-	f_high => nand_res_h,
-	c_out => nand_c_out,
-	equal => nand_equal,
-	ov => nand_ov,
-	sign => nand_sign
-);
+	lrs_c_out         => lrs_c_out,
+	lrs_equal         => lrs_equal,
+	lrs_ov            => lrs_ov,
+	lrs_sign          => lrs_sign,
 
-xor_1 : bit_xor
-port map (
-	A => A,
-	B => B,
-	f_low => xor_res_l,
-	f_high => xor_res_h,
-	c_out => xor_c_out,
-	equal => xor_equal,
-	ov => xor_ov,
-	sign => xor_sign
+	llr_c_out         => llr_c_out,
+	llr_equal         => llr_equal,
+	llr_ov            => llr_ov,
+	llr_sign          => llr_sign,
+
+	lrr_c_out         => lrr_c_out,
+	lrr_equal         => lrr_equal,
+	lrr_ov            => lrr_ov,
+	lrr_sign          => lrr_sign,
+
+	mul_c_out         => mul_c_out,
+	mul_equal         => mul_equal,
+	mul_ov            => mul_ov,
+	mul_sign          => mul_sign,
+
+	nand_c_out        => nand_c_out,
+	nand_equal        => nand_equal,
+	nand_ov           => nand_ov,
+	nand_sign         => nand_sign,
+
+	xor_c_out         => xor_c_out,
+	xor_equal         => xor_equal,
+	xor_ov            => xor_ov,
+	xor_sign          => xor_sign,
+
+	-- selected result and flag
+	f_low_res         => f_low,
+	f_high_res        => f_high,
+	c_out_res         => c_out,
+	equal_res         => equal,
+	ov_res            => ov,
+	sign_res          => sign,
+	
+	equal_flag        => equal_flag,
+	-- crc
+	crc_res           => crc_result
 );
 
 crc_mem_1 : crc_mem
 port map (
-	byte_in => DOB(7 downto 6),
-	crc_in => crc_in,
-	crc_out => crc_out
+	CLK      => CLK,
+	strobe   => crc_strobe,
+	data_in  => DOB,
+	crc_out  => crc_result,
+	ready    => crc_byte_processed
 );
 
 WEA <= '1' when cmd="1100" else '0';
-ENA <= '1' when cmd="1100" or cmd="1101" else '0';
 ADDRA <= '0' & B;
-ADDRB <= '0' & A when crc_busy='0' else '0' & crc_addr;
 
 ram_1 : ram
 port map (
@@ -389,148 +395,103 @@ port map (
 	RSTB => rst
 );
 
+-- FSM for crc_controller - RAM bridge
 process(CLK)
-begin
-	if rising_edge(clk) then		
-		if rst='1' then
-			-- reset internal
-			crc_busy <= '0';
-			crc_addr <= (others => '0');
-			can_B <= '0';
-			can_sending <= '0';
-			ENB <= '0';
-			WEB <= '0';
-			
-			-- reset output
-			f_low <= (others => '0');
-			f_high <= (others => '0');
-			c_out <= '0';
-			equal <= '0';
-			ov <= '0';
-			sign <= '0';
-			CAN <= '1';
-			cb <= '0';
-			ready <= '1';
-		--elsif crc_busy='1' then
-		--	if crc_addr=crc_addr_high then
-		--		crc_busy<='0';
-		--		cb <= '0';
-		--	else
-		--		crc_addr <= std_logic_vector(unsigned(crc_addr) + 1);
-		--	end if;
-		--	
-		--	crc_in <= crc_out;
-		--	f_low <= crc_out(7 downto 0);
-		--	f_high <= crc_out(15 downto 8);
+begin -- state and reset
+	if rising_edge(clk) then
+		if RST='1' then
+			current_crc_state <= idle;
 		else
-			case cmd is
-				when "0000" =>
-					f_low <= add_res_l;
-					f_high <= add_res_h;
-					c_out <= add_c_out;
-					equal <= add_equal;
-					ov <= add_ov;
-					sign <= add_sign;
-				when "0001" =>
-					f_low <= sub_res_l;
-					f_high <= sub_res_h;
-					c_out <= sub_c_out;
-					equal <= sub_equal;
-					ov <= sub_ov;
-					sign <= sub_sign;
-				when "0010" =>
-					f_low <= add_lls_res_l;
-					f_high <= add_lls_res_h;
-					c_out <= add_lls_c_out;
-					equal <= add_lls_equal;
-					ov <= add_lls_ov;
-					sign <= add_lls_sign;
-				when "0011" =>
-					f_low <= add_lls_lls_res_l;
-					f_high <= add_lls_lls_res_h;
-					c_out <= add_lls_lls_c_out;
-					equal <= add_lls_lls_equal;
-					ov <= add_lls_lls_ov;
-					sign <= add_lls_lls_sign;
-				when "0100" =>
-					f_low <= neg_res_l;
-					f_high <= neg_res_h;
-					c_out <= neg_c_out;
-					equal <= neg_equal;
-					ov <= neg_ov;
-					sign <= neg_sign;
-				when "0101" =>
-					f_low <= lls_res_l;
-					f_high <= lls_res_h;
-					c_out <= lls_c_out;
-					equal <= lls_equal;
-					ov <= lls_ov;
-					sign <= lls_sign;
-				when "0110" =>
-					f_low <= lrs_res_l;
-					f_high <= lrs_res_h;
-					c_out <= lrs_c_out;
-					equal <= lrs_equal;
-					ov <= lrs_ov;
-					sign <= lrs_sign;
-				when "0111" =>
-					f_low <= llr_res_l;
-					f_high <= llr_res_h;
-					c_out <= llr_c_out;
-					equal <= llr_equal;
-					ov <= llr_ov;
-					sign <= llr_sign;
-				when "1000" =>
-					f_low <= lrr_res_l;
-					f_high <= lrr_res_h;
-					c_out <= lrr_c_out;
-					equal <= lrr_equal;
-					ov <= lrr_ov;
-					sign <= lrr_sign;
-				when "1001" =>
-					f_low <= mul_res_l;
-					f_high <= mul_res_h;
-					c_out <= mul_c_out;
-					equal <= mul_equal;
-					ov <= mul_ov;
-					sign <= mul_sign;
-				when "1010" =>
-					f_low <= nand_res_l;
-					f_high <= nand_res_h;
-					c_out <= nand_c_out;
-					equal <= nand_equal;
-					ov <= nand_ov;
-					sign <= nand_sign;
-				when "1011" =>
-					f_low <= xor_res_l;
-					f_high <= xor_res_h;
-					c_out <= xor_c_out;
-					equal <= xor_equal;
-					ov <= xor_ov;
-					sign <= xor_sign;
-				when "1100" => -- handled at ram definition
-				when "1101" =>
-					f_low <= crc_out(15 downto 8);
-					f_high <= crc_out(7 downto 0);
-					crc_busy <= '1';
-					crc_addr <= std_logic_vector(unsigned(A) + 1);
-					crc_addr_high <= B;
-					crc_in <= (others => '0');
-				when "1110" =>
-					can_sending <= '1';
-					ready <= '0';
-
-					
-				when "1111" =>
-					can_B <= not can_B;
-				when others =>
-			end case;
+			current_crc_state <= next_crc_state;
 		end if;
-	end if;
-
-	
+  end if;
 end process;
 
+process(current_crc_state, cmd, A, B)
+begin -- next state logic
+	case current_crc_state is
+		when idle =>
+			if cmd = "1101" then
+				next_crc_state <= ram_init;
+			else
+				next_crc_state <= idle;
+			end if;
+
+		when ram_init =>
+			next_crc_state <= init;
+		
+		when init =>
+			next_crc_state <= wait_ready;
+
+		when prefetch =>
+			next_crc_state <= fetch;
+
+		when fetch =>
+			next_crc_state <= wait_ready;
+
+		when wait_ready =>
+			if crc_byte_processed='1' then
+				if ADDRB = crc_address_high then
+					next_crc_state <= idle;
+				else
+					next_crc_state <= prefetch;
+				end if;
+			else
+				next_crc_state <= wait_ready;
+			end if;
+
+		when others =>
+			next_crc_state <= idle;
+		end case;
+end process;
+
+
+output_logic : process(current_crc_state, DOB, crc_byte_processed)
+begin -- output logic
+	cb           <= '0';
+	crc_strobe  <= '0';
+	ADDRB        <= ADDRB;
+	crc_address_high <= crc_address_high;
+
+	case current_crc_state is
+		when idle =>
+			cb <= '0';
+			crc_address_high <= B;
+		
+		when ram_init =>
+			cb <= '1';
+		
+		when init =>
+			 cb         <= '1';
+			 crc_strobe <= '1';
+
+		when prefetch =>
+			cb <= '1';
+
+		when FETCH =>
+			 cb <= '1';
+
+		when WAIT_READY =>
+			 cb <= '1';
+			 
+			 if crc_byte_processed='1' then
+				ADDRB <= '0' & std_logic_vector(unsigned(ADDRB) + 1);
+			end if;
+	end case;
+end process;
+
+process(CLK)
+begin
+	if rising_edge(CLK) then
+		cmd_out <= cmd;
+
+		case cmd is
+			when "1111" =>
+				can_B <= not can_B;
+			when others =>
+		end case;
+	end if;
+end process;
 
 end Behavioral;
 
