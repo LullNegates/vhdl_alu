@@ -1,4 +1,11 @@
 
-#Created by Constraints Editor (xc3s500e-vq100-4) - 2026/05/09
+#Created by Constraints Editor (xc3s500e-vq100-5) - 2026/05/12
 NET "CLK" TNM_NET = CLK;
-TIMESPEC TS_CLK = PERIOD "CLK" 2 ns HIGH 40%;
+TIMESPEC TS_CLK = PERIOD "CLK" 3 ns HIGH 25%;
+#Created by Constraints Editor (xc3s500e-vq100-5) - 2026/05/12
+#Created by Constraints Editor (xc3s500e-vq100-5) - 2026/05/12
+INST "crc_mem_1/*" TNM = crc_mem_combinatorials;
+TIMESPEC TS_CRC_MEM_4_CYCLES = FROM "crc_mem_combinatorials" TO "FFS" TS_CLK * 4 DATAPATHONLY;
+#Created by Constraints Editor (xc3s500e-vq100-5) - 2026/05/12
+INST "ram_1/RAMB4_S8_S8_inst" TNM = RAM;
+TIMESPEC TS_RAM_4_CYCLES = FROM "RAM" TO "FFS" TS_CLK * 2;
