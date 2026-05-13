@@ -5,10 +5,11 @@ use IEEE.NUMERIC_STD.ALL;
 -- Architecture structural_v2: ALU3 arithmetic sub-entities + ALU1 CRC/CAN logic.
 -- RAM: RAMB4_S8_S8 Xilinx Block RAM via ram component (ALU3/RAM.vhd).
 --      Simulation: ISim only (UNISIM primitive, GHDL not supported).
---      CLKA = CLK  (Port A, Write): latcht Adresse/Daten auf steigender Flanke —
---        gleiche Flanke wie Testbench-Inputs -> kein Off-by-half-cycle Fehler.
---      CLKB = CLK_N (Port B, Read): latcht Adresse auf fallender Flanke,
---        DOB gültig bis zur nächsten steigenden Flanke (1-Takt-Latenz pipelined).
+--      CLKA = CLKB = CLK: beide Ports auf der steigenden Flanke.
+--      Read-Latenz (1 Takt) ist durch ADDRB-Vorausladung im IDLE-Zustand pipelined:
+--      ADDRB = '0'&A im IDLE-Takt (Cmd=1101) -> DOB = mem[A] im ersten CRC_COMPUTE-Takt.
+--      CLK_N / BUFG wurden entfernt: ISims UNISIM-Modell von RAMB4_S8_S8 simuliert
+--      anti-korrelierte Takte (CLK / NOT CLK) auf Port A/B nicht korrekt.
 -- CRC: CAN CRC-15 / ISO 11898, polynomial 0x4599, 1 byte/cycle (variable for-loop).
 -- CAN: two-phase serializer (header register MSB-first, then mem[A..B]).
 --      ADDRB pre-fetches next byte during current byte serialization -> no inter-byte gap.
@@ -33,11 +34,6 @@ architecture structural_v2 of ASALU is
   component bit_nand    port(A,B: in std_logic_vector(7 downto 0); f_low,f_high: out std_logic_vector(7 downto 0); c_out,equal,ov,sign: out std_logic); end component;
   component bit_xor     port(A,B: in std_logic_vector(7 downto 0); f_low,f_high: out std_logic_vector(7 downto 0); c_out,equal,ov,sign: out std_logic); end component;
 
-  -- BUFG: globaler Clock-Buffer für den invertierten Takt.
-  -- Ohne BUFG behandelt ISE CLK_N als kombinatorisches Signal vor dem BRAM-Clock-Pin,
-  -- was den Placer mit FATAL_ERROR (fast feedbacks, bad index) zum Absturz bringt.
-  -- Mit BUFG wird CLK_N über das dedizierte Clock-Netz geführt — ISE akzeptiert das.
-  component BUFG port(I : in std_logic; O : out std_logic); end component;
 
   -- RAMB4_S8_S8 dual-port block RAM (from alu3/RAM.vhd)
   component ram
@@ -69,10 +65,6 @@ architecture structural_v2 of ASALU is
          lls_sg, lrs_sg, llr_sg, lrr_sg,
          mul_sg, nand_sg, xor_sg             : std_logic;
 
-  -- CLK_INV: einfacher Inverter-Ausgang (LUT), wird als BUFG-Eingang genutzt.
-  -- CLK_N:   global verteilter invertierter Takt (BUFG-Ausgang) für RAMB4 CLKA/CLKB.
-  signal CLK_INV : std_logic;
-  signal CLK_N   : std_logic;
 
   -- RAM port signals (Port A = write, Port B = read)
   signal ADDRA : std_logic_vector(8 downto 0);
@@ -109,12 +101,7 @@ architecture structural_v2 of ASALU is
 
 begin
 
-  Equal   <= '1' when A = B else '0';
-  CLK_INV <= not CLK;
-
-  -- BUFG verteilt CLK_INV über das globale Clock-Netz — verhindert Placer-Absturz
-  -- (FATAL_ERROR: Pl_Uap_Flow1FitterRuleFastFeedbacks) bei invertiertem BRAM-Takt.
-  u_bufg_n : BUFG port map(I => CLK_INV, O => CLK_N);
+  Equal <= '1' when A = B else '0';
 
   -- Port A: write (WriteRAM). WEA driven combinatorially from Cmd.
   ADDRA <= '0' & B;
@@ -134,13 +121,10 @@ begin
   u_ram : ram
     generic map(ADDRESSWIDTH => 9, DATAWIDTH => 8)
     port map(
-      -- CLKA = CLK: Write auf steigender Flanke — Testbench setzt Inputs VOR der
-      -- steigenden Flanke, BRAM latcht sie genau dann. CLKA=CLK_N wäre ein
-      -- Off-by-half-cycle Bug: Inputs ändern sich 1 ns nach der Flanke, CLK fällt
-      -- erst 5 ns später -> falscher Write-Zeitpunkt.
-      -- CLKB = CLK_N: Read-Adresse auf fallender Flanke latchen, DOB bis zur
-      -- nächsten steigenden Flanke gültig (1-Takt-Latenz pipelined).
-      CLKA  => CLK,     CLKB  => CLK_N,
+      -- CLKA = CLKB = CLK: beide Ports auf steigender CLK-Flanke.
+      -- ADDRB wird im IDLE-Takt (Cmd=1101) als '0'&A vorausgeladen —
+      -- DOB = mem[A] ist damit im ersten CRC_COMPUTE-Takt gültig (1 Takt Latenz).
+      CLKA  => CLK,     CLKB  => CLK,
       DIA   => DIA,
       -- DIB: Port B wird nur lesend genutzt. x"00" statt (others=>'0') weil XST
       -- in Port Maps keine uneingeschränkte Aggregat-Syntax unterstützt
