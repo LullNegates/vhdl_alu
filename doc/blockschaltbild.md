@@ -1,13 +1,15 @@
 ---
 title: ASALU — Top-Level Blockschaltbild
 date: 2026-05-09
+updated: 2026-05-18
 tags: [vhdl, alu, blockschaltbild, asalu, embedded-systems]
 ---
 
 # ASALU — Top-Level Blockschaltbild
 
-Gilt für beide Architekturen (ALU 1: `behavioral`, ALU 2: `structural`).
-Die Sub-Blöcke entsprechen den VHDL-Entities in ALU 2.
+Gilt für alle Architekturen (`behavioral` in alu1, `structural_v2` in alu13).
+Die Sub-Blöcke im internen Strukturdiagramm entsprechen den VHDL-Entities in alu13.
+Architektur-spezifische Unterschiede sind inline vermerkt.
 
 ---
 
@@ -16,10 +18,10 @@ Die Sub-Blöcke entsprechen den VHDL-Entities in ALU 2.
 ```
            ┌──────────────────────────────────────────────┐
   CLK  ───►│                                              ├──► Flow[7:0]
-  A[7:0] ─►│                  ASALU                       ├──► FHigh[7:0]
-  B[7:0] ─►│                                              ├──► Cout
- Cmd[3:0] ►│                                              ├──► Equal
-           │                                              ├──► OV
+  RST  ───►│                  ASALU                       ├──► FHigh[7:0]
+  A[7:0] ─►│                                              ├──► Cout
+  B[7:0] ─►│                                              ├──► Equal
+ Cmd[3:0] ►│                                              ├──► OV
            │                                              ├──► Sign
            │                                              ├──► CB
            │                                              ├──► Ready
@@ -62,8 +64,12 @@ Die Sub-Blöcke entsprechen den VHDL-Entities in ALU 2.
    │               ┌────────▼───────────┐         │  · CB='1', Ready='0'         │
    │               │    Flag Generator  │         │                              │
    │               │  Cout  OV  Sign    ├────────►│  CAN-Serializer              │
-   │               │  CB    Ready       │         │  · 1 Bit / Takt, MSB first   │
-   │               └────────────────────┘         │  · Ready='0' während Send    │
+   │               │  CB    Ready       │         │  · 1 Bit/Takt (behavioral)   │
+   │               └────────────────────┘         │  · 500 Takte/Bit (structural)│
+   │                                              │    @ 500 MHz → 1 Mbit/s     │
+   │                                              │  · Header-Reg. (20a/20b)    │
+   │                                              │    vor Datenbytes gesendet   │
+   │                                              │  · Ready='0' während Send    │
    │                                              └──────────────────────────────┘
    │
    └──► Equal = (A = B)   [kombinatorisch, taktunabhängig]
@@ -100,6 +106,7 @@ Die Sub-Blöcke entsprechen den VHDL-Entities in ALU 2.
 | Port    | Richt. | Breite | Beschreibung                                    |
 |---------|--------|--------|-------------------------------------------------|
 | CLK     | in     | 1      | Takt                                            |
+| RST     | in     | 1      | Synchroner Reset (aktiv '1') — setzt State, Outputs und interne Register zurück |
 | A       | in     | 8      | Operand A / RAM-Startadresse                    |
 | B       | in     | 8      | Operand B / RAM-Adresse (WriteRAM) / Endadresse |
 | Cmd     | in     | 4      | Befehlscode (Befehlstabelle 1+2, 16 Ops)        |
@@ -137,8 +144,10 @@ Die Sub-Blöcke entsprechen den VHDL-Entities in ALU 2.
 | 1111 | Reserved        | —                             | 0               | 0           | 0           |
 
 **MUL:** FHigh = oberes Byte, Flow = unteres Byte.
+**MUL2/MUL4:** behavioral: FHigh='0'; structural_v2: FHigh = oberes Byte des 16-bit-Ergebnisses (Sub-Entity-Ausgabe).
 **CRC_MEM:** FHigh[7]='0' (Padding), da CRC-15 nur 15 Bit belegt. CRC-Polynom: 0x4599 (ISO 11898 / CAN).
 **SendCANData:** CRC wird *nicht* automatisch angehängt — CRC_MEM und SendCANData sind eigenständige Befehle.
+**RST:** Synchroner Reset (steigede CLK-Flanke, aktiv '1'). Setzt State→IDLE, alle Outputs auf 0, Ready→'1', interne Register (crc_reg, can_reg_*) auf 0.
 
 ---
 

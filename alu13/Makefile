@@ -5,6 +5,8 @@ TOP     = ASALU_structural_v2_tb
 # RAM.vhd excluded from GHDL check (UNISIM/RAMB4 = ISim only)
 SRC_CHECK = \
 	src/asalu_entity.vhd \
+	src/alu1_behavioral.vhd \
+	src/alu1_tb.vhd \
 	src/add.vhd \
 	src/subtract.vhd \
 	src/add_lls.vhd \
@@ -21,7 +23,8 @@ SRC_CHECK = \
 	src/alu13_tb.vhd
 
 # Full source list for ISE (includes RAM.vhd)
-SRC_ISE = src/asalu_entity.vhd src/RAM.vhd src/add.vhd src/subtract.vhd \
+SRC_ISE = src/asalu_entity.vhd src/alu1_behavioral.vhd src/alu1_tb.vhd \
+          src/RAM.vhd src/add.vhd src/subtract.vhd \
           src/add_lls.vhd src/add_lls_lls.vhd src/negate.vhd src/sll.vhd \
           src/lrs.vhd src/llr.vhd src/lrr.vhd src/mul.vhd \
           src/bit_nand.vhd src/bit_xor.vhd src/alu13.vhd src/alu13_tb.vhd
