@@ -1,7 +1,7 @@
 ---
 title: ASALU — Top-Level Blockschaltbild
 date: 2026-05-09
-updated: 2026-05-18
+updated: 2026-05-12
 tags: [vhdl, alu, blockschaltbild, asalu, embedded-systems]
 ---
 
@@ -66,8 +66,8 @@ Architektur-spezifische Unterschiede sind inline vermerkt.
    │               │  Cout  OV  Sign    ├────────►│  CAN-Serializer              │
    │               │  CB    Ready       │         │  · 1 Bit/Takt (behavioral)   │
    │               └────────────────────┘         │  · 500 Takte/Bit (structural)│
-   │                                              │    @ 500 MHz → 1 Mbit/s     │
-   │                                              │  · Header-Reg. (20a/20b)    │
+   │                                              │    @ 500 MHz → 1 Mbit/s      │
+   │                                              │  · Header-Reg. (20a/20b)     │
    │                                              │    vor Datenbytes gesendet   │
    │                                              │  · Ready='0' während Send    │
    │                                              └──────────────────────────────┘
@@ -103,22 +103,22 @@ Architektur-spezifische Unterschiede sind inline vermerkt.
 
 ## Port-Tabelle
 
-| Port    | Richt. | Breite | Beschreibung                                    |
-|---------|--------|--------|-------------------------------------------------|
-| CLK     | in     | 1      | Takt                                            |
-| RST     | in     | 1      | Synchroner Reset (aktiv '1') — setzt State, Outputs und interne Register zurück |
-| A       | in     | 8      | Operand A / RAM-Startadresse                    |
-| B       | in     | 8      | Operand B / RAM-Adresse (WriteRAM) / Endadresse |
-| Cmd     | in     | 4      | Befehlscode (Befehlstabelle 1+2, 16 Ops)        |
-| Flow    | out    | 8      | Ergebnis Low-Byte                               |
-| FHigh   | out    | 8      | Ergebnis High-Byte (belegt bei MUL, CRC)        |
-| Cout    | out    | 1      | Carry / Borrow / herausgeschobenes Bit          |
-| Equal   | out    | 1      | A = B (kombinatorisch)                          |
-| OV      | out    | 1      | Signed Overflow (ADD / SUB)                     |
-| Sign    | out    | 1      | MSB des Ergebnisses                             |
-| CB      | out    | 1      | CRCBusy — '1' während CRC_MEM                  |
-| Ready   | out    | 1      | '0' während CRC_MEM / SendCANData, sonst '1'   |
-| CAN     | out    | 1      | Serieller CAN-Datenausgang                      |
+| Port    | Richt. | Breite | Beschreibung                                                                    |
+|---------|--------|--------|---------------------------------------------------------------------------------|
+| CLK     | in     | 1      | Takt                                                                            |
+| RST     | in     | 1      | Synchroner Reset (aktiv '1') - setzt State, Outputs und interne Register zurück |
+| A       | in     | 8      | Operand A / RAM-Startadresse                                                    |
+| B       | in     | 8      | Operand B / RAM-Adresse (WriteRAM) / Endadresse                                 |
+| Cmd     | in     | 4      | Befehlscode (Befehlstabelle 1+2, 16 Ops)                                        |
+| Flow    | out    | 8      | Ergebnis Low-Byte                                                               |
+| FHigh   | out    | 8      | Ergebnis High-Byte (belegt bei MUL, CRC)                                        |
+| Cout    | out    | 1      | Carry / Borrow / herausgeschobenes Bit                                          |
+| Equal   | out    | 1      | A = B (kombinatorisch)                                                          |
+| OV      | out    | 1      | Signed Overflow (ADD / SUB)                                                     |
+| Sign    | out    | 1      | MSB des Ergebnisses                                                             |
+| CB      | out    | 1      | CRCBusy — '1' während CRC_MEM                                                   |
+| Ready   | out    | 1      | '0' während CRC_MEM / SendCANData, sonst '1'                                    | 
+| CAN     | out    | 1      | Serieller CAN-Datenausgang                                                      |
 
 ---
 
