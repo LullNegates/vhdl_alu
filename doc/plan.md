@@ -1,168 +1,151 @@
-# Implementation Plan — vhdl_alu (G5)
+# Implementation Plan — vhdl_alu (G5, Projektaufgabe 3)
 
-## Design goal: Maximale Nebenläufigkeit
+## Entwurfsziel
 
-All ALU operations are computed simultaneously as concurrent signal assignments (dataflow style).
-A `with opcode select` muxes the result. No `process` blocks anywhere in the RTL — this is the
-purest expression of concurrent VHDL and maps directly to parallel combinational logic in hardware.
-
----
-
-## Phase 0 — Specs
-
-- [x] Confirmed G5 device: Spartan3E 500
-- [x] Confirmed G5 Entwurfsziel: Maximale Nebenläufigkeit
-- [x] ALU 1 spec confirmed (8-bit, 3-bit opcode, 8 ops, carry output)
-- [ ] **ALU 2 spec: confirm exact port widths, operation set, and required flags from G5 assignment sheet**
+| Parameter    | Wert                                                  |
+|--------------|-------------------------------------------------------|
+| Gruppe       | G5                                                    |
+| Device       | Spartan-3E 500 (xc3s500e-5-vq100)                    |
+| Aufgabe      | A_VHDL_P3-a_v_unlocked.pdf                            |
+| Ziel         | Verhaltensbeschreibung + Strukturbeschreibung (ASALU) |
+| Abgabe       | ISim-Screenshots + VHDL-Quellen                       |
 
 ---
 
-## Phase 1 — ALU 1 ✓ COMPLETE
+## Entwicklungsverlauf (Mehrgleisig → Merge)
 
-### 1a. `alu1/src/alu1.vhd`
-- [x] Port interface: a, b (8-bit), opcode (3-bit), result (8-bit), carry (1-bit)
-- [x] All 8 operations as concurrent intermediate signals (9-bit res_add/res_sub for carry)
-- [x] `with opcode select` mux for result and carry
-- [x] Zero processes — pure concurrent/dataflow architecture
-- [x] `ieee.numeric_std` for arithmetic
+Das Projekt wurde parallel auf zwei Tracks entwickelt, die am Ende zu **alu13** zusammengeführt wurden.
 
-### 1b. `alu1/src/alu1_tb.vhd`
-- [x] 10 test vectors — every opcode + edge cases (carry, underflow)
-- [x] `wait for 20 ns` between stimulus changes
-- [x] `assert` + `severity failure` on every expected output
-- [x] GHDL result: `@200ns: Simulation complete -- all assertions passed`
+### Track 1 — Darko (alu1 + alu2)
 
-### 1c. `alu1/Makefile`
-- [x] GHDL std=08, compile order enforced, `make simulate` / `make view`
+**alu1** (`alu1/src/alu1.vhd`): Verhaltensbeschreibung (`architecture behavioral`).
+Vollständige ASALU-Implementierung: alle 16 Ops, FSM (IDLE / CRC_COMPUTE / CAN_SEND),
+CAN-CRC-15 Engine, CAN-Serializer (two-phase, Header + Datenbytes), WriteRAM, synchroner Reset.
+Simulation mit GHDL, 27/27 Testvektoren grün.
+
+**alu2** (`alu2/src/alu2.vhd`): Strukturbeschreibung (`architecture structural`), ebenfalls von Darko.
+7 eigene Sub-Entities (arith_unit, mul_unit, shift_unit, logic_unit, result_mux, …),
+3-stufige Pipeline (ID/EX/WB) mit `mc_stall` für CRC/CAN-Blockade.
+Latenz: 2 Takte pro Arithmetik-Op. 27/27 Testvektoren grün.
+
+### Track 2 — Bjarne (alu3)
+
+**alu3** (`alu3/`): Bjarne's Strukturbeschreibung mit eigenen Sub-Entities (`add`, `subtract`,
+`add_lls`, `add_lls_lls`, `negate`, `lls`, `lrs`, `llr`, `lrr`, `mul`, `bit_nand`, `bit_xor`)
+sowie `combinatorics.vhd` (Stage-1-Wrapper) und `resultSelect.vhd` (Stage-2-Mux).
+RAM: Xilinx RAMB4_S8_S8 Dual-Port Block RAM. CRC/CAN als eigene Entities (`CRC_MEM.vhd`, `CAN.vhd`).
+UCF: 3 ns Periode, Multi-Cycle-Path-Constraints.
+
+### Team-Entscheidung: alu13 als finales Integrationsprojekt
+
+Nach Abgleich beider Tracks wurde entschieden, **alu13** als gemeinsames Abgabe-Projekt zu bauen:
+Bjarne's Sub-Entities (alu3) als strukturelle Basis + Darko's CRC/CAN-FSM-Logik (alu1) als
+Top-Level-Integration. alu2's eigenständige Sub-Entities wurden damit nicht mehr weitergeführt.
+
+**Anpassungen an alu3-Sub-Entities für alu13:**
+Die Sub-Entities aus alu3 mussten für die Integration in alu13 angepasst werden — insbesondere
+die Port-Schnittstellen und das Verhalten einzelner Einheiten wurden auf die gemeinsame
+Entity-Spezifikation (ASALU) ausgerichtet. Bjarne's `combinatorics`/`resultSelect`-Wrapper-Struktur
+wurde in alu13 nicht übernommen; stattdessen instanziiert `alu13.vhd` die Sub-Entities direkt
+und implementiert das Pipelining inline (2-Stage, ohne zusätzliche Wrapper-Entities).
 
 ---
 
-## Phase 2 — ALU 2
+## Finale Architektur — alu13
 
-### Design approach (confirmed: same Maximale Nebenläufigkeit style)
+**Verzeichnis:** `alu13/` (self-contained, kein externes alu1/ oder shared/ erforderlich)
 
-ALU 2 extends ALU 1 with a **full 4-flag status register** computed as concurrent
-signal assignments. The operation datapath is identical to ALU 1; the only additions
-are the four output flags and an internal `result_i` signal to allow flags to read
-the mux output without a feedback loop.
+### Enthaltene Architekturen
+
+| Datei                  | Architecture         | Simulation |
+|------------------------|----------------------|------------|
+| `src/alu1_behavioral.vhd` | `behavioral`      | GHDL + ISim |
+| `src/alu13.vhd`        | `structural_v2`      | ISim only (RAMB4) |
+
+Konfiguration in ISE: `cfg_behavioral` bzw. `cfg_structural_v2`.
+
+### Entity-Ports (ASALU)
+
+| Port  | Richt. | Breite | Beschreibung                                    |
+|-------|--------|--------|-------------------------------------------------|
+| CLK   | in     | 1      | Takt (steigende Flanke)                         |
+| RST   | in     | 1      | Synchroner Reset (aktiv '1')                    |
+| A     | in     | 8      | Operand A / RAM-Startadresse                    |
+| B     | in     | 8      | Operand B / RAM-Adresse (WriteRAM) / Endadresse |
+| Cmd   | in     | 4      | Befehlscode (16 Ops)                            |
+| Flow  | out    | 8      | Ergebnis Low-Byte                               |
+| FHigh | out    | 8      | Ergebnis High-Byte (MUL, CRC)                   |
+| Cout  | out    | 1      | Carry / Borrow / herausgeschobenes Bit          |
+| Equal | out    | 1      | A = B (kombinatorisch)                          |
+| OV    | out    | 1      | Signed Overflow (ADD / SUB)                     |
+| Sign  | out    | 1      | MSB des Ergebnisses                             |
+| CB    | out    | 1      | CRCBusy — '1' während CRC_MEM                  |
+| Ready | out    | 1      | '0' während CRC_MEM / SendCANData               |
+| CAN   | out    | 1      | Serieller CAN-Datenausgang                      |
+
+### structural_v2 — Interne Struktur
 
 ```
-a, b ──┬──► [ADD 9-bit]────┐
-       ├──► [SUB 9-bit]────┤
-       ├──► [AND]──────────┤
-       ├──► [OR] ──────────┼──► with opcode select ──► result_i ──► result
-       ├──► [XOR]──────────┤                                │
-       ├──► [NOT]──────────┤                                ├──► Z = (result_i = 0)
-       ├──► [SHL]──────────┤                                ├──► N = result_i(7)
-       └──► [SHR]──────────┘          C ◄── carry mux ──── ┘
-                                      V ◄── overflow logic (concurrent)
-opcode ──────────────────────────────────────────────────► selects
+A, B ──► [add] [subtract] [add_lls] [add_lls_lls]    ← 12 Sub-Entities
+         [negate] [lls] [lrs] [llr] [lrr]               (alu3, kombinatorisch)
+         [mul] [bit_nand] [bit_xor]
+                │
+         ┌──────▼──────────────────────────────┐
+         │  Stage 1 (p1_pipe)                  │  ← Alle Ergebnisse + Cmd
+         │  Registriert alle 12×(f_low,f_high, │    werden pro Takt gelatcht
+         │  c_out, ov, sign) + Cmd             │
+         └──────────────────┬──────────────────┘
+                            │ p1_cmd / p1_*
+         ┌──────────────────▼──────────────────┐
+         │  Stage 2 (IDLE-Mux)                 │  ← Wählt per p1_cmd aus,
+         │  Flow / FHigh / Cout / OV / Sign    │    schreibt in Output-Register
+         └─────────────────────────────────────┘
+
+FSM-Ops (CRC_MEM, SendCAN, WriteRAM) reagieren auf raw Cmd — kein Pipeline-Delay.
+Equal: kombinatorisch direkt von A/B-Ports, taktunabhängig.
 ```
 
-### Flag definitions
+### 2-Stage Arithmetic Pipeline
 
-| Flag | Port | Computation | Notes |
-|------|------|-------------|-------|
-| C — Carry    | `c : out std_logic` | `res_add(8)` for ADD, `res_sub(8)` for SUB, `'0'` otherwise | `with opcode select` |
-| Z — Zero     | `z : out std_logic` | `'1' when result_i = x"00" else '0'`                       | conditional concurrent |
-| N — Negative | `n : out std_logic` | `result_i(7)`                                               | simple concurrent slice |
-| V — Overflow | `v : out std_logic` | Signed overflow from sign bits of a, b, result_i            | `with opcode select` |
+- **Latenz:** 2 Takte (Arithmetik Cmd 0x0–0xB)
+- **Durchsatz:** 1 Ergebnis/Takt nach Pipeline-Fill
+- **FSM-Ops:** bypassen Pipeline, Latenz unverändert
+- **Testbench:** 2× `wait until rising_edge(CLK)` pro Arithmetik-Assertion
 
-### Signed overflow (V) logic — fully concurrent
+### RAM
 
-```
-ADD:  V = (not a(7) and not b(7) and result_i(7))
-          or (a(7) and b(7) and not result_i(7))
+- **behavioral:** internes VHDL-Array (`ram_t`, 256×8 bit) — GHDL-kompatibel
+- **structural_v2:** Xilinx RAMB4_S8_S8 Dual-Port Block RAM (`RAM.vhd`) — ISim only
+  - Port A: Write (WriteRAM), Port B: Read (CRC/CAN), CLKA = CLKB = CLK
+  - ADDRB-Vorausladung im IDLE-Takt kompensiert die 1-Takt-Lese-Latenz
 
-SUB:  V = (not a(7) and b(7) and result_i(7))
-          or (a(7) and not b(7) and not result_i(7))
+### CAN-Serializer
 
-all other ops: V = '0'
-```
+- **behavioral:** 1 Bit pro Takt (kein Baudratengenerator)
+- **structural_v2:** `CAN_DIV = 499` → 500 Systemtakte pro CAN-Bit @ 500 MHz = 1 Mbit/s
+- Beide: Phase 0 = Header-Register (2.0A: 19-bit, 2.0B: 39-bit), Phase 1 = mem[A..B] MSB-first
 
-This is expressed as a single `with opcode select` statement — no process.
+### Synthese-Ergebnisse (structural_v2, xc3s500e-5-vq100, vor Pipeline)
 
-### Port interface (assumed — CONFIRM from G5 sheet)
+| Strategie         | Min. Period | Max. Freq | Slices    | LUTs    | FFs   | BRAMs |
+|-------------------|-------------|-----------|-----------|---------|-------|-------|
+| Balanced (default)| 8.295 ns    | 120.5 MHz | 241 (5%)  | 453 (4%)| 98    | 1/20  |
+| Timing Performance| 7.446 ns    | 134.3 MHz | 233 (5%)  | 438 (4%)| 126   | 1/20  |
 
-| Port    | Dir | Width | Description                          |
-|---------|-----|-------|--------------------------------------|
-| `a`     | in  | 8     | Operand A                            |
-| `b`     | in  | 8     | Operand B                            |
-| `opcode`| in  | 3     | Selects operation                    |
-| `result`| out | 8     | Computed result                      |
-| `c`     | out | 1     | Carry / borrow                       |
-| `z`     | out | 1     | Zero flag                            |
-| `n`     | out | 1     | Negative flag (sign bit of result)   |
-| `v`     | out | 1     | Signed overflow flag                 |
-
-### Operation set (assumed — same as ALU 1, CONFIRM from G5 sheet)
-
-| Opcode | Op  | Expression              |
-|--------|-----|-------------------------|
-| `000`  | ADD | `a + b`                 |
-| `001`  | SUB | `a - b`                 |
-| `010`  | AND | `a and b`               |
-| `011`  | OR  | `a or b`                |
-| `100`  | XOR | `a xor b`               |
-| `101`  | NOT | `not a`                 |
-| `110`  | SHL | logical shift left 1    |
-| `111`  | SHR | logical shift right 1   |
-
-### 2a. `alu2/src/alu2.vhd`
-
-- [ ] Declare ports: a, b (8-bit), opcode (3-bit), result (8-bit), c, z, n, v (1-bit each)
-- [ ] Internal signals: res_add/res_sub (9-bit), res_and/or/xor/not/shl/shr (8-bit), result_i (8-bit)
-- [ ] Concurrent assignments for all 8 ops (identical pattern to alu1)
-- [ ] `with opcode select result_i <=` mux
-- [ ] `result <= result_i`
-- [ ] `with opcode select c <=` carry mux
-- [ ] `z <= '1' when result_i = x"00" else '0'`
-- [ ] `n <= result_i(7)`
-- [ ] `with opcode select v <=` overflow logic
-
-### 2b. `alu2/src/alu2_tb.vhd`
-
-Test vectors must cover:
-
-| Category          | Vectors needed                                      |
-|-------------------|-----------------------------------------------------|
-| ADD normal        | result, C=0, Z=0, N=0, V=0                         |
-| ADD carry         | 0xFF+0x01 → C=1, Z=1, N=0, V=0                    |
-| ADD signed OVF    | 0x7F+0x01 → C=0, Z=0, N=1, V=1                    |
-| SUB normal        | result, C=0                                         |
-| SUB borrow        | 0x00-0x01 → C=1, N=1                               |
-| SUB signed OVF    | 0x80-0x01 → V=1                                    |
-| AND               | Z=0 and Z=1 cases                                  |
-| OR / XOR / NOT    | basic correctness + N flag check                   |
-| SHL / SHR         | confirm N flag and Z flag propagate correctly       |
-| Zero result       | any op that gives 0x00 → Z=1                       |
-
-Minimum: ~14 test vectors. `SETTLE = 20 ns`, same pattern as alu1_tb.
-
-### 2c. `alu2/Makefile`
-
-Mirror of `alu1/Makefile` — change entity name from `alu1` to `alu2` and wave filename.
+Kritischer Pfad (beide): RAMB4→DOB → CRC-XOR-Kette → `crc_reg`.
+Nach Pipeline-Einbau: RAMB4→crc_reg-Pfad durch p1-Stage entkoppelt — Verbesserung erwartet.
 
 ---
 
-## Phase 3 — Submission prep
+## Status
 
-- [ ] Both testbenches pass GHDL with zero failures
-- [ ] ISim screenshots taken for both ALUs (copy to VMShare)
-- [ ] README status table updated
-- [ ] Git commit + push
-
----
-
-## Architecture rationale: why pure concurrent for "Maximale Nebenläufigkeit"
-
-A `process` with a `case` statement is still concurrent at the VHDL simulator level but
-synthesises to a priority MUX chain. A `with/select` without intermediate signals computes
-all branches before selecting — but declaring each operation as a named intermediate signal
-makes the parallelism explicit and readable, and forces the synthesiser to implement each
-path as independent logic with no data dependency between them. This is the correct
-interpretation of "maximale Nebenläufigkeit" in an FHDW context.
-
-The `result_i` signal in ALU 2 (internal alias for the mux output) is necessary so that
-Z, N, and V flags can read the selected result without creating a combinational feedback
-loop on the `result` output port directly.
+- [x] alu1 behavioral — 27/27 Testvektoren grün
+- [x] alu2 structural (3-Stage Pipeline) — 27/27 Testvektoren grün
+- [x] alu3 Sub-Entities — von Bjarne, als Basis für alu13
+- [x] alu13 structural_v2 (Integration) — ISim grün, Synthese sauber
+- [x] alu13 2-Stage Pipeline eingebaut
+- [x] UCF korrigiert (NET "CLK" nach BUFG-Removal)
+- [x] Synchroner Reset in Entity + beide Architekturen
+- [x] behavioral nach alu13/src/ integriert — alu13 ist self-contained
+- [ ] ISim-Screenshots für Abgabe
+- [ ] doc/plan.md finalisiert ← dieser Stand
