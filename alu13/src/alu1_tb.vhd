@@ -7,24 +7,6 @@ end entity ASALU_behavioral_tb;
 
 architecture sim of ASALU_behavioral_tb is
 
-  component ASALU is
-    port (
-      CLK   : in  std_logic;
-      RST   : in  std_logic;
-      A     : in  std_logic_vector(7 downto 0);
-      B     : in  std_logic_vector(7 downto 0);
-      Cmd   : in  std_logic_vector(3 downto 0);
-      Flow  : out std_logic_vector(7 downto 0);
-      FHigh : out std_logic_vector(7 downto 0);
-      Cout  : out std_logic;
-      Equal : out std_logic;
-      OV    : out std_logic;
-      Sign  : out std_logic;
-      CB    : out std_logic;
-      Ready : out std_logic;
-      CAN   : out std_logic
-    );
-  end component;
 
   signal CLK   : std_logic := '0';
   signal RST   : std_logic := '0';
@@ -48,7 +30,7 @@ architecture sim of ASALU_behavioral_tb is
 
 begin
 
-  dut : ASALU
+  dut : entity work.ASALU(behavioral)
     port map (
       CLK   => CLK,
       RST   => RST,
@@ -283,8 +265,3 @@ begin
 
 end architecture sim;
 
-configuration cfg_behavioral of ASALU_behavioral_tb is
-  for sim
-    for dut : ASALU use entity work.ASALU(behavioral); end for;
-  end for;
-end configuration cfg_behavioral;
