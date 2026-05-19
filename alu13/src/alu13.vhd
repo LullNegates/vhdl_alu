@@ -18,11 +18,6 @@ use IEEE.NUMERIC_STD.ALL;
 -- CRC: CAN CRC-15 / ISO 11898, polynomial 0x4599, 1 byte/cycle (variable for-loop).
 -- CAN: two-phase serializer (header register MSB-first, then mem[A..B]).
 --      ADDRB pre-fetches next byte during current byte serialization -> no inter-byte gap.
---
--- OPEN SEMANTICS (resolve with team before final submission):
---   NEG (0100): bitwise NOT via ALU3 negate.vhd  (NOT A, not two's complement -A)
---   MUL2/MUL4 (0010/0011): 16-bit result in FHigh:Flow via ALU3 sub-entities
---   MUL Sign flag: hardcoded '0' in ALU3 mul.vhd
 architecture structural_v2 of ASALU is
 
   -- ALU3 arithmetic sub-entity components (port names match alu3/*.vhd exactly)

@@ -9,6 +9,71 @@ Zwei Architekturen (`behavioral` + `structural_v2`), gemeinsame Entity, gemeinsa
 
 ---
 
+## Teilaufgaben-Übersicht (Projektaufgabe 3)
+
+| Teilaufgabe | Beschreibung | Status |
+|-------------|--------------|--------|
+| a) | Verhaltensbeschreibung (architecture behavioral, TopLevel-Blockschaltbild) | `alu1_behavioral.vhd`, `doc/blockschaltbild.md` |
+| b) | Strukturbeschreibung mit Optimierung auf Design-Ziel G5 (maximale Nebenläufigkeit) | `alu13.vhd` + 12 Sub-Entities |
+| c) | Beide Versionen bis FirstSignOff (alle Assertions passed) | behavioral: 706 ns / structural_v2: 175616 ns |
+| d) | Implementation + Design Summary (wichtige Parameter kommentiert) | Synthese: behavioral 123 MHz, structural_v2 128.7 MHz, siehe Tabelle unten |
+
+---
+
+## Design-Ziel G5 — Maximale Nebenläufigkeit
+
+Gruppe G5 hat als Entwurfsziel **maximale Nebenläufigkeit** für die Strukturbeschreibung. Die folgenden Designentscheidungen wurden getroffen um dieses Ziel zu erfüllen:
+
+### Räumliche Nebenläufigkeit — 12 parallele Sub-Entities
+
+Alle 12 arithmetisch-logischen Operationen werden in **eigenen kombinatorischen Sub-Entities** berechnet, die permanent und gleichzeitig aktiv sind:
+
+| Sub-Entity    | Operation         |
+|---------------|-------------------|
+| `add`         | A + B             |
+| `subtract`    | A − B             |
+| `add_lls`     | (A+B) × 2         |
+| `add_lls_lls` | (A+B) × 4         |
+| `negate`      | −A                |
+| `lls`         | A << 1            |
+| `lrs`         | A >> 1            |
+| `llr`         | rotate_left(A)    |
+| `lrr`         | rotate_right(A)   |
+| `mul`         | A × B → 16-bit    |
+| `bit_nand`    | NOT(A AND B)      |
+| `bit_xor`     | A XOR B           |
+
+Jede Sub-Entity berechnet ihr Ergebnis jeden Takt, unabhängig vom aktuellen Cmd. Der Output-Mux in Stage 2 wählt das relevante Ergebnis aus.
+
+### Temporale Nebenläufigkeit — 2-stufige Pipeline
+
+```
+Stage 1 (p1_pipe):          Stage 2 (IDLE-Mux):
+Registriert alle 12     →   Wählt per p1_cmd das
+Ergebnisse + Cmd            Ergebnis aus → Outputs
+```
+
+- **Latenz:** 2 Taktzyklen
+- **Durchsatz:** 1 Instruktion/Takt (nach Pipeline-Fill)
+
+### Einheitliche Sub-Entity-Schnittstelle
+
+Alle Sub-Entities teilen dieselbe Port-Signatur (`A`, `B`, `F_low`, `F_high`, `Cout`, `OV`, `Sign`, `Equal`). Das vereinfacht das Top-Level-Muxing und macht die Struktur konsistent erweiterbar. Ungenutzte Ports (z.B. `B` bei NEG/Shift) werden von XST automatisch wegoptimiert.
+
+### FSM-Bypass
+
+CRC_MEM, WriteRAM und SendCANData reagieren direkt auf `Cmd` ohne Pipeline-Verzögerung. Diese Operationen benötigen sofortigen RAM-Zugriff und wären mit 2-Takt-Latenz nicht korrekt steuerbar.
+
+### RAMB4_S8_S8 Dual-Port Block RAM
+
+Xilinx Block RAM mit zwei unabhängigen Ports: Port A für WriteRAM (synchrones Schreiben), Port B für CRC/CAN-Lesen. Ermöglicht parallelen Zugriff ohne Arbitrierung.
+
+### CAN-Baudratengenerator
+
+500 Systemtakte pro CAN-Bit bei 500 MHz Zielfrequenz → 1 Mbit/s. Die FSM zählt intern, die restliche Logik läuft parallel weiter.
+
+---
+
 ## Repository-Struktur
 
 ```
@@ -63,24 +128,24 @@ vhdl_alu/
 
 ## Befehlstabelle
 
-| Cmd  | Mnemonik    | Operation                        | Cout             | OV         | Sign     |
-|------|-------------|----------------------------------|------------------|------------|----------|
-| 0000 | ADD         | F = A + B                        | Carry            | Signed OVF | MSB      |
-| 0001 | SUB         | F = A − B                        | Borrow           | Signed OVF | MSB      |
-| 0010 | MUL2        | F = (A+B) × 2                    | sum[8]\|[7]      | 0          | MSB      |
-| 0011 | MUL4        | F = (A+B) × 4                    | sum[8]\|[7]\|[6] | 0          | MSB      |
-| 0100 | NEG         | F = −A (2er-Komplement)          | Sign             | 0          | MSB      |
-| 0101 | SLL         | F = A << 1                       | A[7]             | 0          | MSB      |
-| 0110 | SLR         | F = A >> 1                       | A[0]             | 0          | 0        |
-| 0111 | RLL         | F = rotate_left(A)               | 0                | 0          | MSB      |
-| 1000 | RLR         | F = rotate_right(A)              | 0                | 0          | MSB      |
-| 1001 | MUL         | F = A × B → 16-bit               | 0                | 0          | FHigh[7] |
-| 1010 | NAND        | F = NOT(A AND B)                 | 0                | 0          | MSB      |
-| 1011 | XOR         | F = A XOR B                      | 0                | 0          | MSB      |
-| 1100 | WriteRAM    | mem[B] ← A                       | 0                | 0          | 0        |
-| 1101 | CRC_MEM     | CAN-CRC-15 von mem[A..B] → Flow  | 0                | 0          | MSB      |
-| 1110 | SendCANData | Header-Reg + mem[A..B] → CAN-Pin | —                | —          | —        |
-| 1111 | ToggleCAN   | can_mode ← NOT can_mode (2.0A↔2.0B) | 0            | 0          | 0        |
+| Cmd  | Mnemonik    | Operation                           | Cout             | OV         | Sign     |
+|------|-------------|-------------------------------------|------------------|------------|----------|
+| 0000 | ADD         | F = A + B                           | Carry            | Signed OVF | MSB      |
+| 0001 | SUB         | F = A − B                           | Borrow           | Signed OVF | MSB      |
+| 0010 | MUL2        | F = (A+B) × 2                       | sum[8]\|[7]      | 0          | MSB      |
+| 0011 | MUL4        | F = (A+B) × 4                       | sum[8]\|[7]\|[6] | 0          | MSB      |
+| 0100 | NEG         | F = −A (2er-Komplement)             | Sign             | 0          | MSB      |
+| 0101 | SLL         | F = A << 1                          | A[7]             | 0          | MSB      |
+| 0110 | SLR         | F = A >> 1                          | A[0]             | 0          | 0        |
+| 0111 | RLL         | F = rotate_left(A)                  | 0                | 0          | MSB      |
+| 1000 | RLR         | F = rotate_right(A)                 | 0                | 0          | MSB      |
+| 1001 | MUL         | F = A × B → 16-bit                  | 0                | 0          | FHigh[7] |
+| 1010 | NAND        | F = NOT(A AND B)                    | 0                | 0          | MSB      |
+| 1011 | XOR         | F = A XOR B                         | 0                | 0          | MSB      |
+| 1100 | WriteRAM    | mem[B] ← A                          | 0                | 0          | 0        |
+| 1101 | CRC_MEM     | CAN-CRC-15 von mem[A..B] → Flow     | 0                | 0          | MSB      |
+| 1110 | SendCANData | Header-Reg + mem[A..B] → CAN-Pin    | —                | —          | —        |
+| 1111 | ToggleCAN   | can_mode ← NOT can_mode (2.0A↔2.0B) | 0                | 0          | 0        |
 
 **MUL:** FHigh = High-Byte, Flow = Low-Byte (16-bit unsigned).  
 **CRC_MEM:** Polynom 0x4599 (CAN-CRC-15 / ISO 11898), 1 Byte/Takt. CB='1' während Berechnung.  
@@ -115,7 +180,7 @@ Maximale Nebenläufigkeit durch räumliche **und** temporale Nebenläufigkeit.
 | `subtract`      | A − B                                     |
 | `add_lls`       | (A+B) × 2                                 |
 | `add_lls_lls`   | (A+B) × 4                                 |
-| `negate`        | −A (2er-Komplement)                        |
+| `negate`        | −A (2er-Komplement)                       |
 | `lls` / `lrs`   | Shift left / right                        |
 | `llr` / `lrr`   | Rotate left / right                       |
 | `mul`           | A × B → 16-bit                            |
@@ -153,18 +218,17 @@ Das Projekt entstand auf drei parallelen Tracks, die in `alu13` zusammengeführt
 
 ### Simulation (ISim, xc3s500e-5-vq100)
 
-| Architektur    | Latenz       | Testvektoren | Ergebnis              |
-|----------------|-------------|:------------:|-----------------------|
+| Architektur    | Latenz       | Testvektoren | Ergebnis               |
+|----------------|------------- |:------------:|------------------------|
 | behavioral     | 1 Taktzyklus | 27/27        | alle Assertions passed |
 | structural_v2  | 2 Taktzyklen | 27/27        | alle Assertions passed |
 
 ### Synthese (XST, xc3s500e-5-vq100)
 
 | Architektur   | Strategie          | Min. Periode | Max. Freq  | Slices   | LUTs    | FFs  | BRAMs |
-|---------------|--------------------|-------------|-----------|----------|---------|------|-------|
-| behavioral    | Balanced           | 8.226 ns    | 121.6 MHz | 379 (8%) | 728 (7%)| 89   | 2/20  |
-| structural_v2 | Balanced           | 8.295 ns    | 120.5 MHz | 241 (5%) | 453 (4%)| 98   | 1/20  |
-| structural_v2 | Timing Performance | 7.446 ns    | 134.3 MHz | 233 (5%) | 438 (4%)| 126  | 1/20  |
+|---------------|--------------------|--------------|----------- |----------|---------|------|-------|
+| behavioral    | Balanced           | 8.226 ns     | 121.6 MHz  | 379 (8%) | 728 (7%)| 89   | 2/20  |
+| structural_v2 | Speed              | 7.769 ns     | 128.7 MHz  | 256 (5%) | 474 (5%)| 191  | 1/20  |
 
 Kritischer Pfad (structural_v2): RAMB4→DOB → CRC-XOR-Kette → `crc_reg`.  
 Der 2 ns UCF-Constraint (500 MHz) ist ein Test-Target — auf dem Device physikalisch nicht erreichbar.
