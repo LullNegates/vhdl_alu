@@ -1,9 +1,9 @@
-# VHDL ALU — Projektaufgabe 3 (Gruppe G5)
+# VHDL ALU - Projektaufgabe 3 (Gruppe G5)
 
 Anwendungsspezifische ALU für das FHDW-Modul Embedded Systems (SoSe 2026).  
 Zwei Architekturen (`behavioral` + `structural_v2`), gemeinsame Entity, gemeinsames ISE-Projekt in `alu13/`.
 
-- **Gruppe:** G5 — FHDW Hannover
+- **Gruppe:** G5 - FHDW Hannover
 - **Device:** Spartan-3E 500 (xc3s500e-5-vq100)
 - **Entwurfsziel:** Verhaltensbeschreibung + Strukturbeschreibung mit maximaler Nebenläufigkeit
 
@@ -20,11 +20,11 @@ Zwei Architekturen (`behavioral` + `structural_v2`), gemeinsame Entity, gemeinsa
 
 ---
 
-## Design-Ziel G5 — Maximale Nebenläufigkeit
+## Design-Ziel G5 - Maximale Nebenläufigkeit
 
 Gruppe G5 hat als Entwurfsziel **maximale Nebenläufigkeit** für die Strukturbeschreibung. Die folgenden Designentscheidungen wurden getroffen um dieses Ziel zu erfüllen:
 
-### Räumliche Nebenläufigkeit — 12 parallele Sub-Entities
+### Räumliche Nebenläufigkeit - 12 parallele Sub-Entities
 
 Alle 12 arithmetisch-logischen Operationen werden in **eigenen kombinatorischen Sub-Entities** berechnet, die permanent und gleichzeitig aktiv sind:
 
@@ -45,7 +45,7 @@ Alle 12 arithmetisch-logischen Operationen werden in **eigenen kombinatorischen 
 
 Jede Sub-Entity berechnet ihr Ergebnis jeden Takt, unabhängig vom aktuellen Cmd. Der Output-Mux in Stage 2 wählt das relevante Ergebnis aus.
 
-### Temporale Nebenläufigkeit — 2-stufige Pipeline
+### Temporale Nebenläufigkeit - 2-stufige Pipeline
 
 ```
 Stage 1 (p1_pipe):          Stage 2 (IDLE-Mux):
@@ -55,6 +55,13 @@ Ergebnisse + Cmd            Ergebnis aus → Outputs
 
 - **Latenz:** 2 Taktzyklen
 - **Durchsatz:** 1 Instruktion/Takt (nach Pipeline-Fill)
+
+Die Pipeline spart keine Latenz, verkürzt aber den **kritischen Pfad**: statt der gesamten kombinatorischen Kette (Sub-Entity → Mux → Output) in einem Takt muss jede Stage nur ihre Hälfte innerhalb der Taktperiode abschließen. Das erlaubt eine höhere Maximalfrequenz bei gleichem Durchsatz:
+
+| Architektur   | Kritischer Pfad | Max. Freq  |
+|---------------|----------------|------------|
+| behavioral    | 8.226 ns       | 121.6 MHz  |
+| structural_v2 | 7.769 ns       | 128.7 MHz  |
 
 ### Einheitliche Sub-Entity-Schnittstelle
 
@@ -78,7 +85,7 @@ Xilinx Block RAM mit zwei unabhängigen Ports: Port A für WriteRAM (synchrones 
 
 ```
 vhdl_alu/
-├── alu13/                       Abgabe-Projekt — beide Architekturen in einem ISE-Projekt
+├── alu13/                       Abgabe-Projekt - beide Architekturen in einem ISE-Projekt
 │   ├── src/
 │   │   ├── asalu_entity.vhd     Entity ASALU (gemeinsam)
 │   │   ├── alu1_behavioral.vhd  architecture behavioral of ASALU
@@ -90,9 +97,9 @@ vhdl_alu/
 │   ├── ALU.ucf                  Constraints: NET "CLK" PERIOD 2ns
 │   └── Makefile
 │
-├── alu1/                        Entwicklungshistorie — behavioral (Darko)
-├── alu2/                        Entwicklungshistorie — structural 3-Stage-Pipeline (Darko)
-├── alu3/                        Entwicklungshistorie — Sub-Entities + Wrapper (Bjarne)
+├── alu1/                        Entwicklungshistorie - behavioral (Darko)
+├── alu2/                        Entwicklungshistorie - structural 3-Stage-Pipeline (Darko)
+├── alu3/                        Entwicklungshistorie - Sub-Entities + Wrapper (Bjarne)
 ├── shared/
 │   └── asalu_entity.vhd
 └── doc/
@@ -105,7 +112,7 @@ vhdl_alu/
 
 ---
 
-## Entity ASALU — Ports
+## Entity ASALU - Ports
 
 | Port    | Richt. | Breite | Beschreibung                                          |
 |---------|--------|--------|-------------------------------------------------------|
@@ -120,7 +127,7 @@ vhdl_alu/
 | Equal   | out    | 1      | A = B (rein kombinatorisch, taktunabhängig)           |
 | OV      | out    | 1      | Signed Overflow (ADD / SUB)                           |
 | Sign    | out    | 1      | MSB des Ergebnisses                                   |
-| CB      | out    | 1      | CRCBusy — '1' während CRC_MEM läuft                   |
+| CB      | out    | 1      | CRCBusy - '1' während CRC_MEM läuft                   |
 | Ready   | out    | 1      | '0' während CRC_MEM / SendCANData, sonst '1'          |
 | CAN     | out    | 1      | Serieller CAN-Datenausgang (MSB first)                |
 
@@ -144,7 +151,7 @@ vhdl_alu/
 | 1011 | XOR         | F = A XOR B                         | 0                | 0          | MSB      |
 | 1100 | WriteRAM    | mem[B] ← A                          | 0                | 0          | 0        |
 | 1101 | CRC_MEM     | CAN-CRC-15 von mem[A..B] → Flow     | 0                | 0          | MSB      |
-| 1110 | SendCANData | Header-Reg + mem[A..B] → CAN-Pin    | —                | —          | —        |
+| 1110 | SendCANData | Header-Reg + mem[A..B] → CAN-Pin    | -                | -          | -        |
 | 1111 | ToggleCAN   | can_mode ← NOT can_mode (2.0A↔2.0B) | 0                | 0          | 0        |
 
 **MUL:** FHigh = High-Byte, Flow = Low-Byte (16-bit unsigned).  
@@ -157,7 +164,7 @@ vhdl_alu/
 
 Einprozess-Clocked-Design. Alle 16 Operationen in einem `case Cmd`-Block, synchroner Reset.  
 **Latenz:** 1 Taktzyklus pro Arithmetik-Op.  
-**RAM:** internes VHDL-Array (256×8 bit) — GHDL-kompatibel.  
+**RAM:** internes VHDL-Array (256×8 bit) - GHDL-kompatibel.  
 **CAN:** 1 Bit pro Systemtakt (kein Baudratengenerator).
 
 State Machine:
@@ -196,9 +203,9 @@ Sub-Entity-Ergebnisse  →   Ergebnis aus → Flow/FHigh/Flags
 ```
 - **Latenz:** 2 Taktzyklen (Arithmetik Cmd 0x0–0xB)
 - **Durchsatz:** 1 Instruktion/Takt nach Pipeline-Fill
-- **FSM-Ops** (CRC_MEM, SendCAN, WriteRAM) bypassen die Pipeline — reagieren auf raw Cmd
+- **FSM-Ops** (CRC_MEM, SendCAN, WriteRAM) bypassen die Pipeline - reagieren auf raw Cmd
 - **RAM:** Xilinx RAMB4_S8_S8 Dual-Port Block RAM (ISim only, kein GHDL)
-- **CAN:** Baudratengenerator — 500 Systemtakte/Bit bei 500 MHz = 1 Mbit/s
+- **CAN:** Baudratengenerator - 500 Systemtakte/Bit bei 500 MHz = 1 Mbit/s
 
 ---
 
@@ -206,9 +213,9 @@ Sub-Entity-Ergebnisse  →   Ergebnis aus → Flow/FHigh/Flags
 
 Das Projekt entstand auf drei parallelen Tracks, die in `alu13` zusammengeführt wurden:
 
-- **alu1** (Darko) — Verhaltensbeschreibung, vollständige ASALU inkl. CRC/CAN/FSM
-- **alu2** (Darko) — Eigene Strukturbeschreibung: 7 Sub-Entities, 3-Stage-Pipeline (ID/EX/WB)
-- **alu3** (Bjarne) — Alternative Sub-Entities + `combinatorics`/`resultSelect`-Wrapper, RAMB4
+- **alu1** (Darko) - Verhaltensbeschreibung, vollständige ASALU inkl. CRC/CAN/FSM
+- **alu2** (Darko) - Eigene Strukturbeschreibung: 7 Sub-Entities, 3-Stage-Pipeline (ID/EX/WB)
+- **alu3** (Bjarne) - Alternative Sub-Entities + `combinatorics`/`resultSelect`-Wrapper, RAMB4
 
 **Team-Entscheidung:** Bjarnes Sub-Entities (alu3) als strukturelle Basis + Darkos CRC/CAN-FSM-Logik (alu1) als Top-Level → `alu13` als gemeinsames Abgabe-Projekt. Die 2-Stage-Pipeline wurde direkt in `alu13.vhd` eingebaut (ohne Wrapper-Entities).
 
@@ -231,7 +238,7 @@ Das Projekt entstand auf drei parallelen Tracks, die in `alu13` zusammengeführt
 | structural_v2 | Speed              | 7.769 ns     | 128.7 MHz  | 256 (5%) | 474 (5%)| 191  | 1/20  |
 
 Kritischer Pfad (structural_v2): RAMB4→DOB → CRC-XOR-Kette → `crc_reg`.  
-Der 2 ns UCF-Constraint (500 MHz) ist ein Test-Target — auf dem Device physikalisch nicht erreichbar.
+Der 2 ns UCF-Constraint (500 MHz) ist ein Test-Target - auf dem Device physikalisch nicht erreichbar.
 
 ---
 
