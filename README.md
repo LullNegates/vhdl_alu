@@ -55,7 +55,7 @@ vhdl_alu/
 | Equal   | out    | 1      | A = B (rein kombinatorisch, taktunabhängig)           |
 | OV      | out    | 1      | Signed Overflow (ADD / SUB)                           |
 | Sign    | out    | 1      | MSB des Ergebnisses                                   |
-| CB      | out    | 1      | CRCBusy — '1' während CRC_MEM läuft                  |
+| CB      | out    | 1      | CRCBusy — '1' während CRC_MEM läuft                   |
 | Ready   | out    | 1      | '0' während CRC_MEM / SendCANData, sonst '1'          |
 | CAN     | out    | 1      | Serieller CAN-Datenausgang (MSB first)                |
 
@@ -80,7 +80,7 @@ vhdl_alu/
 | 1100 | WriteRAM    | mem[B] ← A                       | 0                | 0          | 0        |
 | 1101 | CRC_MEM     | CAN-CRC-15 von mem[A..B] → Flow  | 0                | 0          | MSB      |
 | 1110 | SendCANData | Header-Reg + mem[A..B] → CAN-Pin | —                | —          | —        |
-| 1111 | Reserved    | —                                | 0                | 0          | 0        |
+| 1111 | ToggleCAN   | can_mode ← NOT can_mode (2.0A↔2.0B) | 0            | 0          | 0        |
 
 **MUL:** FHigh = High-Byte, Flow = Low-Byte (16-bit unsigned).  
 **CRC_MEM:** Polynom 0x4599 (CAN-CRC-15 / ISO 11898), 1 Byte/Takt. CB='1' während Berechnung.  

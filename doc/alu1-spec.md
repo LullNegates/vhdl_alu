@@ -52,7 +52,7 @@
 | 1100 | WriteRAM     | mem[B] ← A, Flow ← A           | 0                 | 0          | 0        |
 | 1101 | CRC_MEM      | CRC-15 von mem[A..B] → Flow     | 0                 | 0          | MSB      |
 | 1110 | SendCANData  | Reg + mem[A..B] seriell → CAN  | —                 | —          | —        |
-| 1111 | Reserved     | —                               | 0                 | 0          | 0        |
+| 1111 | ToggleCAN    | can_mode ← NOT can_mode (2.0A↔2.0B) | 0             | 0          | 0        |
 
 **MUL:** FHigh = High-Byte, Flow = Low-Byte (16-bit unsigned).  
 **NEG:** OV ist in dieser Implementierung hardcoded '0'. In alu13 berechnet `negate.vhd` OV korrekt aus dem MSB-Vergleich.  

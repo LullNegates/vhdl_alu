@@ -205,12 +205,10 @@ begin
               Ready       <= '0';
               state       <= CAN_SEND;
 
-            when others =>  -- 1111: Reserved
-              Flow  <= (others => '0');
-              FHigh <= (others => '0');
-              Cout  <= '0';
-              OV    <= '0';
-              Sign  <= '0';
+            when "1111" =>  -- ToggleCAN: switch between 2.0A (19-bit) and 2.0B (39-bit) mode
+              can_mode <= not can_mode;
+
+            when others => null;
 
           end case;
 

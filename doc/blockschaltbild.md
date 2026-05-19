@@ -141,7 +141,7 @@ Architektur-spezifische Unterschiede sind inline vermerkt.
 | 1100 | WriteRAM        | mem[B] ← A                    | 0               | 0           | 0           |
 | 1101 | CRC_MEM         | CRC-15 von mem[A..B] → Flow   | 0               | 0           | MSB         |
 | 1110 | SendCANData     | mem[A..B] seriell → CAN       | —               | —           | —           |
-| 1111 | Reserved        | —                             | 0               | 0           | 0           |
+| 1111 | ToggleCAN       | can_mode ← NOT can_mode (2.0A↔2.0B) | 0          | 0           | 0           |
 
 **MUL:** FHigh = oberes Byte, Flow = unteres Byte.
 **MUL2/MUL4:** behavioral: FHigh='0'; structural_v2: FHigh = oberes Byte des 16-bit-Ergebnisses (Sub-Entity-Ausgabe).

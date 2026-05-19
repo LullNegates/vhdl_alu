@@ -269,6 +269,13 @@ begin
     assert Flow = x"95" and FHigh = x"00" and CB = '0'
       report "FAIL 1101 CRC result (expected 0x0095 for 0xFF)" severity failure;
 
+    -- ---- 1111: ToggleCAN (2.0A <-> 2.0B) ----
+    Cmd <= "1111"; A <= x"00"; B <= x"00";
+    wait until rising_edge(CLK); wait for 1 ns;  -- toggle to 2.0B
+    Cmd <= "1111";
+    wait until rising_edge(CLK); wait for 1 ns;  -- toggle back to 2.0A
+    assert Ready = '1' report "FAIL 1111 ToggleCAN" severity failure;
+
     -- ---- 1110: SendCANData ----
     -- FSM transition: raw Cmd detected in IDLE, no pipeline delay.
     A <= x"00"; B <= x"01"; Cmd <= "1110";

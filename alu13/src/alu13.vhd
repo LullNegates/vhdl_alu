@@ -283,6 +283,8 @@ begin
                 end if;
                 Ready        <= '0';
                 state        <= CAN_SEND;
+              when "1111" =>  -- ToggleCAN: switch between 2.0A (19-bit) and 2.0B (39-bit) mode
+                can_mode <= not can_mode;
               when others => null;
             end case;
 
