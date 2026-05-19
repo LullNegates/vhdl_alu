@@ -250,15 +250,9 @@ Der 2 ns UCF-Constraint (500 MHz) ist ein Test-Target - auf dem Device physikali
 4. Testbench anklicken (`ASALU_behavioral_tb` oder `ASALU_structural_v2_tb`)
 5. **Simulate Behavioral Model** → ISim → `run all`
 
-### Synthese umschalten
+### Synthese umschalten (structural_v2)
 
-**structural_v2 synthetisieren:**
 1. Files-Tab → Rechtsklick auf `alu1_behavioral.vhd` → Properties → View Association: **Simulation**
-2. Design-Panel → Implementation → `ASALU` anklicken
-3. Processes → **Synthesize - XST** doppelklicken
-
-**behavioral synthetisieren:**
-1. Files-Tab → Rechtsklick auf `alu1_behavioral.vhd` → Properties → View Association: **All**
 2. Design-Panel → Implementation → `ASALU` anklicken
 3. Processes → **Synthesize - XST** doppelklicken
 
@@ -280,3 +274,13 @@ make view       # GTKWave
 | GTKWave 3.3.116 (WSL2)      | Wellenform-Analyse                         |
 | Xilinx ISE 14.7 / ISim (VM) | Simulation + Synthese (beide Architekturen)|
 | TerosHDL (VSCode)           | Port-Viewer + Syntax-Highlighting          |
+
+---
+
+## Anhang: behavioral separat synthetisieren
+
+Normalerweise nicht nötig — behavioral dient als Referenz/Simulation. Falls doch:
+
+1. Files-Tab → Rechtsklick auf `alu1_behavioral.vhd` → Properties → View Association: **All**
+2. Design-Panel → Implementation → `ASALU` anklicken
+3. Processes → **Synthesize - XST** doppelklicken
