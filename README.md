@@ -240,8 +240,20 @@ Der 2 ns UCF-Constraint (500 MHz) ist ein Test-Target — auf dem Device physika
 1. Alle `alu13/src/*.vhd` in ein ISE-Projekt laden
 2. UCF: `alu13/ALU.ucf`
 3. Im Design-Panel **Simulation** wählen
-4. Testbench auswählen und `cfg_behavioral` bzw. `cfg_structural_v2` als Top setzen
-5. **Simulate Behavioral Model** → ISim → Run All (`Shift+F5`)
+4. Testbench anklicken (`ASALU_behavioral_tb` oder `ASALU_structural_v2_tb`)
+5. **Simulate Behavioral Model** → ISim → `run all`
+
+### Synthese umschalten
+
+**structural_v2 synthetisieren:**
+1. Files-Tab → Rechtsklick auf `alu1_behavioral.vhd` → Properties → View Association: **Simulation**
+2. Design-Panel → Implementation → `ASALU` anklicken
+3. Processes → **Synthesize - XST** doppelklicken
+
+**behavioral synthetisieren:**
+1. Files-Tab → Rechtsklick auf `alu1_behavioral.vhd` → Properties → View Association: **All**
+2. Design-Panel → Implementation → `ASALU` anklicken
+3. Processes → **Synthesize - XST** doppelklicken
 
 ### GHDL (nur behavioral, WSL2)
 
